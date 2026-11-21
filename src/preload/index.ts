@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { MenuCommand, StudioBridge } from '@shared/bridge'
+import type { ContentProgress, MenuCommand, StudioBridge } from '@shared/bridge'
 import type { NativeEngineBridge, NativeEvent } from '@shared/nativeEngine'
 
 // The main process says which engine was chosen at start-up (see createWindow).
@@ -37,6 +37,12 @@ const bridge: StudioBridge = {
   sfzInstruments: () => ipcRenderer.invoke('sfz:instruments'),
   surgePatches: () => ipcRenderer.invoke('surge:patches'),
   surgePatchState: (path) => ipcRenderer.invoke('surge:patchState', path),
+  contentPacks: () => ipcRenderer.invoke('content:packs'),
+  installPack: (id) => ipcRenderer.invoke('content:install', id),
+  removePack: (id) => ipcRenderer.invoke('content:remove', id),
+  onContentProgress: (handler) => {
+    ipcRenderer.on('content:progress', (_event, progress: ContentProgress) => handler(progress))
+  },
   pathForFile: (file) => webUtils.getPathForFile(file),
   onMenuCommand: (handler) => {
     ipcRenderer.on('menu', (_event, command: MenuCommand) => handler(command))

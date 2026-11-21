@@ -22,6 +22,7 @@ export type MenuCommand =
   | 'addInstrumentTrack'
   | 'addAudioTrack'
   | 'addBus'
+  | 'findInstrument'
 
 export interface MenuEntry {
   command: MenuCommand
@@ -67,7 +68,9 @@ export const MENUS: MenuSection[] = [
       { command: 'undo', label: 'Undo', accelerator: 'CmdOrCtrl+Z' },
       { command: 'redo', label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z' },
       null,
-      { command: 'split', label: 'Split at Playhead', accelerator: 'CmdOrCtrl+E' }
+      { command: 'split', label: 'Split at Playhead', accelerator: 'CmdOrCtrl+E' },
+      null,
+      { command: 'findInstrument', label: 'Find Instrument…', accelerator: 'CmdOrCtrl+F' }
     ]
   },
   TRACK_MENU

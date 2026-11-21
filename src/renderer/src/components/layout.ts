@@ -16,7 +16,16 @@ export interface Layout {
   globals: boolean
   /** The piano roll's horizontal zoom, in pixels per beat. */
   rollZoom: number
+  /** The browser of instruments, down the right side. */
+  browserOpen: boolean
+  browserWidth: number
+  /** Whether choosing an instrument in the browser plays a note on it. */
+  audition: boolean
+  /** The ids of the instruments starred in the browser. */
+  favourites: string[]
 }
+
+export const BROWSER = { min: 240, max: 480, default: 300 }
 
 export const ROLL_ZOOM = { min: 24, max: 384, default: 96 }
 
@@ -40,7 +49,7 @@ export const DOCK = { min: 140, default: 300 }
 export const ARRANGE_MIN = 120
 
 const KEY = 'studio.layout'
-const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default }
+const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [] }
 
 function stored(): Layout {
   try {
@@ -67,14 +76,23 @@ export function showDock(tab: DockTab): void {
   setLayout(dockOpen && dockTab === tab ? { dockOpen: false } : { dockOpen: true, dockTab: tab })
 }
 
+/** Counts requests to put the keyboard in the browser's search box; the browser acts when it changes. */
+export const useBrowserFocus = create<{ asked: number }>(() => ({ asked: 0 }))
+
+/** Shows the browser, wherever it is, and puts the keyboard in its search box. */
+export function focusBrowser(): void {
+  if (!useLayout.getState().browserOpen && !useFloating.getState().browser) setLayout({ browserOpen: true })
+  useBrowserFocus.setState((s) => ({ asked: s.asked + 1 }))
+}
+
 /** The panels that can be brought out into a window of their own. */
-export type PanelId = 'inspector' | DockTab
+export type PanelId = 'inspector' | 'browser' | DockTab
 
 /** Which panels are out in their own windows. Not remembered: the windows do not outlive the page. */
-export const useFloating = create<Record<PanelId, boolean>>(() => ({ inspector: false, editor: false, mixer: false }))
+export const useFloating = create<Record<PanelId, boolean>>(() => ({ inspector: false, browser: false, editor: false, mixer: false }))
 
 export function setFloating(panel: PanelId, floating: boolean): void {
   useFloating.setState({ [panel]: floating })
   // Coming back, a panel is shown, not left folded away.
-  if (!floating) setLayout(panel === 'inspector' ? { sideOpen: true } : { dockOpen: true, dockTab: panel })
+  if (!floating) setLayout(panel === 'inspector' ? { sideOpen: true } : panel === 'browser' ? { browserOpen: true } : { dockOpen: true, dockTab: panel })
 }

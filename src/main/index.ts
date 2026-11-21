@@ -7,6 +7,7 @@ import { usedAssetIds, type Project } from '@shared/model'
 import type { EngineKind } from '@shared/nativeEngine'
 import * as audioFiles from './audioFiles'
 import { nativeEngineBuilt, nativeEnginePath, startNativeEngine } from './nativeEngine'
+import { contentPacks, installPack, removePack } from './packs'
 import { sfzInstruments } from './sfz'
 import { soundFontPresets } from './soundfont'
 import { surgePatches, surgePatchState } from './surge'
@@ -279,6 +280,10 @@ ipcMain.handle('autosave:read', (): Promise<string | null> => readFile(autosaveP
 ipcMain.handle('soundfont:presets', () => soundFontPresets())
 
 ipcMain.handle('sfz:instruments', () => sfzInstruments())
+
+ipcMain.handle('content:packs', () => contentPacks())
+ipcMain.handle('content:install', (_event, id: string) => installPack(String(id), () => mainWindow))
+ipcMain.handle('content:remove', (_event, id: string) => removePack(String(id), () => mainWindow))
 
 ipcMain.handle('surge:patches', () => surgePatches())
 ipcMain.handle('surge:patchState', (_event, path: string) => surgePatchState(String(path)))

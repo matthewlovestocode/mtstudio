@@ -36,6 +36,32 @@ export interface SaveResult {
   assetPaths: Record<string, string>
 }
 
+/** A pack of sound content the app can install: what it is, what it costs in disk space, and on whose terms. */
+export interface ContentPack {
+  id: string
+  name: string
+  /** What kind of instrument it holds: Bass, Drums, Keys … */
+  kind: string
+  description: string
+  /** Roughly; the download is somewhat smaller. */
+  megabytes: number
+  /** An SPDX licence identifier: CC0-1.0, CC-BY-3.0 … */
+  license: string
+  /** Whose work it is. */
+  credit: string
+  /** Where it is downloaded from. */
+  source: string
+  installed: boolean
+  installing: boolean
+}
+
+/** How far an installation has got. */
+export interface ContentProgress {
+  id: string
+  stage: 'downloading' | 'unpacking'
+  megabytes: number
+}
+
 export interface StudioBridge {
   /** Writes the project and copies its audio into the project folder. Null if cancelled. */
   saveProject(request: SaveRequest): Promise<SaveResult | null>
@@ -72,6 +98,13 @@ export interface StudioBridge {
   surgePatches(): Promise<SurgePatch[]>
   /** The plugin state (`Track.pluginState`) that loads one of those patches into Surge XT; null if it cannot be read. */
   surgePatchState(path: string): Promise<string | null>
+  /** The packs of sound content that can be installed, and which are. */
+  contentPacks(): Promise<ContentPack[]>
+  /** Downloads and installs a pack. Resolves with null when done, or with why it could not be. */
+  installPack(id: string): Promise<string | null>
+  /** Deletes an installed pack's files after asking the user. Resolves with whether it was removed. */
+  removePack(id: string): Promise<boolean>
+  onContentProgress(handler: (progress: ContentProgress) => void): void
   /** Absolute path of a File chosen or dropped by the user. */
   pathForFile(file: File): string
   onMenuCommand(handler: (command: MenuCommand) => void): void

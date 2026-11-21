@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { Browser } from './Browser'
 import { ClipEditor } from './ClipEditor'
 import { Inspector } from './Inspector'
-import { ARRANGE_MIN, DOCK, SIDE, setFloating, setLayout, showDock, useFloating, useLayout, type DockTab, type PanelId } from './layout'
+import { ARRANGE_MIN, BROWSER, DOCK, SIDE, setFloating, setLayout, showDock, useFloating, useLayout, type DockTab, type PanelId } from './layout'
 import { Mixer } from './Mixer'
 import { PopOut } from './PopOut'
 import { Splitter } from './Splitter'
@@ -12,20 +13,22 @@ import { Transport } from './Transport'
  * The window's layout. The transport bar runs across the top. Under it the
  * inspector is a panel down the left side, the arrangement has the rest of
  * the width, and a dock beneath the arrangement holds the clip editor and
- * the mixer. Both panels resize and fold away, and the inspector and each
- * of the dock's tabs can be brought out into a window of its own and put
- * back.
+ * the mixer; the browser of instruments is a panel down the right. The
+ * panels resize and fold away, and the inspector, the browser and each of
+ * the dock's tabs can be brought out into a window of its own and put back.
  */
 const PANELS: Record<PanelId, { title: string; width: number; height: number }> = {
   inspector: { title: 'Inspector', width: 300, height: 640 },
   editor: { title: 'Editor', width: 960, height: 440 },
-  mixer: { title: 'Mixer', width: 760, height: 420 }
+  mixer: { title: 'Mixer', width: 760, height: 420 },
+  browser: { title: 'Browser', width: 340, height: 720 }
 }
 const PANEL_IDS = Object.keys(PANELS) as PanelId[]
 
 function panelContent(panel: PanelId): React.JSX.Element {
   if (panel === 'mixer') return <Mixer />
   if (panel === 'editor') return <ClipEditor />
+  if (panel === 'browser') return <Browser />
   return (
     <div className="insp">
       <Inspector />
@@ -37,6 +40,7 @@ export function Shell(): React.JSX.Element {
   const layout = useLayout()
   const floating = useFloating()
   const sideDocked = layout.sideOpen && !floating.inspector
+  const browserDocked = layout.browserOpen && !floating.browser
   const main = useRef<HTMLDivElement>(null)
   // The dock may not squeeze the arrangement out, however small the window gets.
   const [dockMax, setDockMax] = useState(DOCK.default)
@@ -135,6 +139,42 @@ export function Shell(): React.JSX.Element {
             )}
           </section>
         </div>
+
+        {browserDocked ? (
+          <>
+            <Splitter
+              orientation="vertical"
+              label="Browser width"
+              value={layout.browserWidth}
+              min={BROWSER.min}
+              max={BROWSER.max}
+              reset={BROWSER.default}
+              direction={-1}
+              onChange={(browserWidth) => setLayout({ browserWidth })}
+            />
+            <aside className="next-side" style={{ width: layout.browserWidth }}>
+              <PanelHead title="Browser">
+                <PopOutButton panel="browser" />
+                <button className="panel-fold" title="Hide the browser" aria-label="Hide the browser" onClick={() => setLayout({ browserOpen: false })}>
+                  <Chevron direction="right" />
+                </button>
+              </PanelHead>
+              {panelContent('browser')}
+            </aside>
+          </>
+        ) : (
+          <div className="next-rail right">
+            <button
+              className="panel-fold"
+              title={floating.browser ? 'Bring the browser back from its window' : 'Show the browser'}
+              aria-label={floating.browser ? 'Bring the browser back from its window' : 'Show the browser'}
+              onClick={() => setFloating('browser', false)}
+            >
+              {floating.browser ? <DockBackIcon /> : <Chevron direction="left" />}
+            </button>
+            <span>Browser{floating.browser ? ' · in window' : ''}</span>
+          </div>
+        )}
       </div>
       {PANEL_IDS.filter((panel) => floating[panel]).map((panel) => (
         <PopOut key={panel} name={panel} title={PANELS[panel].title} width={PANELS[panel].width} height={PANELS[panel].height} onClose={() => setFloating(panel, false)}>

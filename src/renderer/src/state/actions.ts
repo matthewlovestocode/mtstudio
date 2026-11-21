@@ -119,14 +119,17 @@ export function removeTrack(trackId: Id): void {
 
 // ── Instruments, effects, sends, automation ──────────────────────────────
 
-export function setInstrument(trackId: Id, instrument: InstrumentType): void {
-  edit((p) =>
-    mapTrack(p, trackId, (t) => ({
-      ...t,
-      instrument,
-      synth: t.synth ?? { ...DEFAULT_SYNTH },
-      sampler: t.sampler ?? { ...DEFAULT_SAMPLER }
-    }))
+/** `gesture`, here and for the other ways of setting an instrument, makes a run of them one undo step: trying one after another in the browser. */
+export function setInstrument(trackId: Id, instrument: InstrumentType, gesture?: string): void {
+  edit(
+    (p) =>
+      mapTrack(p, trackId, (t) => ({
+        ...t,
+        instrument,
+        synth: t.synth ?? { ...DEFAULT_SYNTH },
+        sampler: t.sampler ?? { ...DEFAULT_SAMPLER }
+      })),
+    gesture
   )
 }
 
@@ -139,23 +142,23 @@ export function addPluginEffect(trackId: Id, plugin: PluginRef): void {
 }
 
 /** Makes a plugin the track's instrument, with the settings it starts with. */
-export function setInstrumentPlugin(trackId: Id, plugin: PluginRef): void {
-  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: undefined, pluginPatch: undefined })))
+export function setInstrumentPlugin(trackId: Id, plugin: PluginRef, gesture?: string): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: undefined, pluginPatch: undefined })), gesture)
 }
 
 /** Makes a plugin the track's instrument with a patch already loaded: `state` is the plugin state that holds it. */
-export function setInstrumentPatch(trackId: Id, plugin: PluginRef, state: string, patch: string): void {
-  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: state, pluginPatch: patch })))
+export function setInstrumentPatch(trackId: Id, plugin: PluginRef, state: string, patch: string, gesture?: string): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: state, pluginPatch: patch })), gesture)
 }
 
 /** Makes a preset of the SoundFont the track's instrument. */
-export function setInstrumentSoundFont(trackId: Id, soundfont: SoundFontPreset): void {
-  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'soundfont', soundfont })))
+export function setInstrumentSoundFont(trackId: Id, soundfont: SoundFontPreset, gesture?: string): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'soundfont', soundfont })), gesture)
 }
 
 /** Makes an SFZ instrument the track's instrument. */
-export function setInstrumentSfz(trackId: Id, sfz: SfzInstrument): void {
-  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'sfz', sfz })))
+export function setInstrumentSfz(trackId: Id, sfz: SfzInstrument, gesture?: string): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'sfz', sfz })), gesture)
 }
 
 /** Records the settings a plugin reports (`effectId` null for the track's instrument). A run of reports is one undo step. */

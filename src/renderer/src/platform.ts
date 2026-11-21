@@ -9,6 +9,7 @@ import { decodePcm, type StreamInfo } from '@shared/pcm'
 import { timeMap } from '@shared/timemap'
 import { engine } from './engine'
 import type { AssetInfo, AudioStream } from './engine/types'
+import { focusBrowser } from './components/layout'
 import { addTrack, makeTrack, splitClips } from './state/actions'
 import { emptyProject } from './state/demo'
 import { assetInfo, useStudio } from './state/store'
@@ -376,5 +377,7 @@ export function runCommand(command: MenuCommand): void {
       return addTrack('audio')
     case 'addBus':
       return addTrack('bus')
+    case 'findInstrument':
+      return focusBrowser()
   }
 }

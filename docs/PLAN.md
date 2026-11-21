@@ -135,6 +135,29 @@ is silent in the Web Audio engine, and the inspector says so.
   VST3 host uses; the engine needs to know nothing about patches. The
   picker draws at most 300 rows of a long list and relies on typing to
   narrow it.
+- **Browser and library (`components/Browser.tsx`, `library.ts`):** a
+  panel down the right lists every instrument from every source as one
+  catalogue: the engine's own three, the SoundFont's presets, installed
+  SFZ instruments, Surge XT's patches and plugin instruments. Each is
+  filed under a kind (Keys, Bass, Drums, Leads …) worked out from where it
+  comes from: General MIDI's sixteen program families, Surge's folders, or
+  for SFZ a guess from the name. It can be searched, narrowed by kind or
+  source, and starred. Choosing one gives it to the selected instrument
+  track, or makes a track for it, and plays a note on it. It works from
+  the keyboard alone: Find Instrument (Cmd/Ctrl-F) goes to the search
+  box, the arrow keys step through the list loading and playing each
+  instrument, the typing keyboard plays what is loaded, Enter keeps it
+  and Escape puts back what the track had. A run of instruments tried
+  that way is one undo step (the instrument actions take a gesture). Under the list
+  is the library: the SFZ packs in the manifest (`packs`), each with its
+  kind, size, licence and whose work it is, to search, install or remove.
+  There are 45: every pack of the SFZ Instruments collection on GitHub
+  whose licence is CC0, CC BY 4.0 or the Unlicense and whose licence file
+  says so (checked by script, 43 packs), plus the Salamander piano and
+  VSCO 2 CE. Left out: packs with no licence stated, non-commercial and
+  share-alike ones, and three whose licence file could not be found. Installing
+  fetches the pack's repository as an archive at its pinned commit and
+  unpacks it into `content/sfz` (`src/main/packs.ts`).
 - **Content (`native/content`):** sound files are not in the repository.
   `manifest.json` lists each with where it comes from, its SHA-256, its
   licence and whom to credit; `npm run fetch:content` downloads and checks
@@ -146,11 +169,13 @@ is silent in the Web Audio engine, and the inspector says so.
   not; share-alike is decided case by case.
 
 Left over:
-- SFZ has only been played from a one-sample test instrument (pitch,
-  timing to the sample, release and failure cases checked offline). No
-  real pack is installed yet: the open ones are large (Salamander piano
-  about 700 MB, VSCO 2 CE about 2.3 GB as repositories), and
-  `fetch-content` only knows single files, not packs
+- No pack has been installed through the library yet: the download and
+  unpacking have not been run. A pack's archive is not checked against a
+  checksum (GitHub does not promise its archives are byte-for-byte
+  stable); it is pinned by commit and fetched over HTTPS. SFZ itself has
+  only been played from a one-sample test instrument
+- The browser's kinds are a guess for SFZ instruments, and every plugin
+  instrument is filed under Synth
 - sfizz is left at its own output level, which for the test instrument is
   some 10 dB under the SoundFont's; to be judged against real instruments
 - Surge XT must be installed by the user, and found by a plugin scan,
@@ -165,8 +190,7 @@ Left over:
   only been exercised through the offline render, which shares the mixing
   but not the note commands
 - The piano roll shows note names, not drum names, for a SoundFont drum kit
-- A library to browse and download content from, and Surge XT as a
-  bundled synth
+- Shipping Surge XT with the app
 
 ### Web Audio engine (`engine/WebAudioEngine.ts`)
 

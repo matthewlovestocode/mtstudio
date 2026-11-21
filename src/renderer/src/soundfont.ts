@@ -39,6 +39,16 @@ let sfz: SfzInstrument[] = []
 const sfzListeners = new Set<() => void>()
 let sfzAsked = false
 
+/** Asks again for the installed SFZ instruments: a pack has been installed or removed. */
+export function refreshSfzInstruments(): void {
+  void (bridge?.sfzInstruments() ?? Promise.resolve([]))
+    .catch(() => [])
+    .then((found) => {
+      sfz = found
+      for (const each of sfzListeners) each()
+    })
+}
+
 /** The installed SFZ instruments, ordered by pack and then name. Empty until the list arrives, and in a browser tab. */
 export function useSfzInstruments(): SfzInstrument[] {
   return useSyncExternalStore(
@@ -46,12 +56,7 @@ export function useSfzInstruments(): SfzInstrument[] {
       sfzListeners.add(listener)
       if (!sfzAsked) {
         sfzAsked = true
-        void (bridge?.sfzInstruments() ?? Promise.resolve([]))
-          .catch(() => [])
-          .then((found) => {
-            sfz = found
-            for (const each of sfzListeners) each()
-          })
+        refreshSfzInstruments()
       }
       return () => sfzListeners.delete(listener)
     },
