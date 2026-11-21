@@ -1,6 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { ADD_MENU, MENUS, acceleratorLabel, type MenuSection } from '@shared/menu'
 import type { NativeInput, NativeLatency } from '@shared/nativeEngine'
+import { keySegments, segmentAt } from '@shared/keymap'
 import { timeMap } from '@shared/timemap'
 import { Meter, NumberField } from './controls/fields'
 import { engine, nativeEngine } from '../engine'
@@ -10,6 +11,7 @@ import { setLoop, setTempo } from '../state/actions'
 import { MAX_ZOOM, MIN_ZOOM, useStudio } from '../state/store'
 import { formatBars, formatTime, useFrame } from '../util'
 import { Button, IconButton, Toggle } from './controls/buttons'
+import { KeyPicker } from './KeyPicker'
 import { useLayout } from './layout'
 import { Caret, MenuButton, Popover, useMenu, type MenuItem, type Origin } from './controls/Popover'
 
@@ -47,6 +49,8 @@ export function Transport(): React.JSX.Element {
   // The tempo and time signature in force at the playhead; editing the tempo edits that tempo change.
   const [tempo, setTempoShown] = useState(() => timeMap(useStudio.getState().project).tempoAt(0))
   const [meter, setMeterShown] = useState('4/4')
+  /** The start of the stretch of key the playhead is in, so the key shown and set is the one in force there. */
+  const [keyFrom, setKeyFrom] = useState(0)
 
   const bars = useRef<HTMLSpanElement>(null)
   const time = useRef<HTMLSpanElement>(null)
@@ -60,6 +64,7 @@ export function Transport(): React.JSX.Element {
     setTempoShown((shown) => (shown.id === now.id && shown.bpm === now.bpm ? shown : now))
     const signature = map.meterAt(position)
     setMeterShown(`${signature.numerator}/${signature.denominator}`)
+    setKeyFrom(segmentAt(keySegments(project), position)?.tick ?? 0)
   })
 
   const zoom = (factor: number): void => useStudio.setState({ pxPerBeat: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, pxPerBeat * factor)) })
@@ -107,6 +112,8 @@ export function Transport(): React.JSX.Element {
             {meter}
           </span>
         </label>
+
+        <KeyPicker at={keyFrom} />
 
         <div className="tb-group">
           <Toggle label="Loop the marked region (shift-drag the ruler to mark it)" pressed={loopOn} onChange={(enabled) => setLoop({ enabled })}>

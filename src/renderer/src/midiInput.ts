@@ -3,6 +3,9 @@ import type { Id } from '@shared/model'
 import { engine } from './engine'
 import { captureNoteOff, captureNoteOn } from './recording'
 import { useSyncExternalStore } from 'react'
+import { keyAt } from '@shared/keymap'
+import { SCALES } from '@shared/theory'
+import { useLayout } from './components/layout'
 import { useStudio } from './state/store'
 import { isTyping } from './util'
 
@@ -90,6 +93,24 @@ export function useTypingOctave(): number {
 }
 const keyPitches = new Map<string, number>()
 
+/** The white-key row, left to right: in scale mode these go up the key's scale, one step each. */
+const SCALE_KEYS = 'asdfghjkl'
+
+/**
+ * The note a typing key plays. Usually by its place on a piano's keys; with
+ * "A–K play the scale" on and a key set, the home row goes up the scale from
+ * the key's root, so that every key is a note that belongs.
+ */
+function pitchFor(key: string): number | null {
+  // The key in force where the playhead is.
+  const songKey = keyAt(useStudio.getState().project, engine.getPosition())
+  if (!songKey || !useLayout.getState().scaleKeys) return (octave + 1) * 12 + KEY_SEMITONES[key]
+  const place = SCALE_KEYS.indexOf(key)
+  if (place < 0) return null
+  const steps = SCALES[songKey.scale].steps
+  return (octave + 1) * 12 + songKey.root + 12 * Math.floor(place / steps.length) + steps[place % steps.length]
+}
+
 function initKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     if (!useStudio.getState().typingKeys || e.metaKey || e.ctrlKey || e.altKey || e.repeat || isTyping(e.target)) return
@@ -97,7 +118,9 @@ function initKeyboard(): void {
     if (key === 'z') setTypingOctave(octave - 1)
     else if (key === 'x') setTypingOctave(octave + 1)
     else if (key in KEY_SEMITONES && !keyPitches.has(key)) {
-      const pitch = (octave + 1) * 12 + KEY_SEMITONES[key]
+      const pitch = pitchFor(key)
+      // In scale mode the black-key row has nothing to play.
+      if (pitch === null) return
       keyPitches.set(key, pitch)
       noteOn(pitch, 0.8)
     }

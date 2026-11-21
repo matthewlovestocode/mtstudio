@@ -27,6 +27,16 @@ export interface Layout {
   inputDevice: string | null
   /** The step sequencer's grid: how many steps to a beat. */
   stepDivision: number
+  /** In the piano roll, notes drawn or moved go only to notes of the key. */
+  scaleLock: boolean
+  /** In the piano roll, only the key's notes have rows. */
+  scaleFold: boolean
+  /** The typing keyboard's A to K play up the key's scale, not up the white keys. */
+  scaleKeys: boolean
+  /** How long a chord added from the palette lasts, in bars. */
+  chordBars: number
+  /** Whether chords from the palette have their seventh on top. */
+  chordSevenths: boolean
 }
 
 export const BROWSER = { min: 240, max: 480, default: 300 }
@@ -53,7 +63,7 @@ export const DOCK = { min: 140, default: 300 }
 export const ARRANGE_MIN = 120
 
 const KEY = 'studio.layout'
-const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null, stepDivision: 4 }
+const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null, stepDivision: 4, scaleLock: false, scaleFold: false, scaleKeys: false, chordBars: 1, chordSevenths: false }
 
 function stored(): Layout {
   try {

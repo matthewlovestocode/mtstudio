@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { DRUM_NAMES, newId, PPQ, type MidiClip, type Note, type Track } from '@shared/model'
+import { keySegments, segmentAt } from '@shared/keymap'
+import { inKey, isRoot, nearestInKey, noteName, type Key } from '@shared/theory'
 import { timeMap } from '@shared/timemap'
 import { TextField } from './controls/fields'
 import { engine } from '../engine'
-import { addNote, quantiseNotes, removeNotes, transposeNotes, updateClip, updateNote, updateNotes } from '../state/actions'
+import { barChords } from '../harmony'
+import { addNote, fixNotesToKey, quantiseNotes, removeNotes, stepNotesInKey, transposeNotes, updateClip, updateNote, updateNotes } from '../state/actions'
 import { useStudio } from '../state/store'
 import { isBlackKey, pitchName, snapTo, startDrag, useFrame } from '../util'
-import { Button, IconButton, Segmented } from './controls/buttons'
+import { Button, IconButton, Segmented, Toggle } from './controls/buttons'
+import { ChordBar } from './ChordBar'
+import { KeyPicker } from './KeyPicker'
 import { useMenu } from './controls/Popover'
 import { ROLL_ZOOM, setLayout, useLayout } from './layout'
 
@@ -53,7 +58,30 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const width = clip.length * pxPerTick
   const drums = track.instrument === 'drums'
-  const nameOf = (pitch: number): string => (drums ? DRUM_NAMES[pitch % 12] : pitchName(pitch))
+  // The key may change along the clip, so it is asked for by position: `key` is the one the clip starts in, which the
+  // keyboard at the left is labelled by, and each note is judged by the key where it falls.
+  const segments = drums ? [] : keySegments(project)
+  const keyAtTick = (tick: number): Key | null => segmentAt(segments, tick)?.key ?? null
+  const keyOf = (note: { start: number }): Key | null => keyAtTick(clip.start + note.start)
+  const key = keyAtTick(clip.start)
+  const inClip = segments.filter((segment) => segment.tick < clip.start + clip.length && segment.end > clip.start)
+  /** More than one key in the clip: the rows are then lit stretch by stretch, not along their whole length. */
+  const keyed = inClip.length > 1
+  const lock = useLayout((s) => s.scaleLock) && !!key
+  const fold = useLayout((s) => s.scaleFold) && !!key
+  const nameOf = (pitch: number): string => (drums ? DRUM_NAMES[pitch % 12] : key ? noteName(pitch, key) : pitchName(pitch))
+
+  // The rows, top to bottom. Folded, only the key's notes have one, and any other note the clip uses, so that nothing in it is out of sight.
+  const used = new Set(clip.notes.map((n) => n.pitch))
+  const rows = fold && key ? PITCHES.filter((pitch) => inClip.some((segment) => inKey(segment.key, pitch)) || used.has(pitch)) : PITCHES
+  const rowIndex = new Map(rows.map((pitch, i) => [pitch, i]))
+  const rowOf = (pitch: number): number => rowIndex.get(pitch) ?? Math.max(0, rows.findIndex((each) => each <= pitch))
+  const pitchAtRow = (row: number): number => rows[clamp(row, 0, rows.length - 1)]
+  /** Where a pitch that has been dragged or drawn ends up: on the notes of the key in force at `start` (in the clip) when locked or folded, leaning the way it was going. */
+  const settle = (pitch: number, lean: number, start: number): number => {
+    const here = lock || fold ? keyOf({ start }) : null
+    return here ? nearestInKey(here, pitch, lean) : pitch
+  }
 
   // Bring the clip's notes into view when a different clip is opened.
   useEffect(() => {
@@ -61,7 +89,7 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
     if (!el) return
     const pitches = clip.notes.map((n) => n.pitch)
     const centre = pitches.length ? (Math.min(...pitches) + Math.max(...pitches)) / 2 : 60
-    el.scrollTop = (HIGH - centre) * ROW_HEIGHT - el.clientHeight / 2
+    el.scrollTop = rowOf(Math.round(centre)) * ROW_HEIGHT - el.clientHeight / 2
     el.scrollLeft = 0
     useStudio.setState({ selectedNoteIds: [] })
     // Only when the clip changes, not as its notes are edited.
@@ -98,8 +126,8 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
         const right = Math.max(x0, x1)
         const bottom = Math.max(y0, y1)
         setMarquee({ left, top, width: right - left, height: bottom - top })
-        const highest = HIGH - Math.floor(top / ROW_HEIGHT)
-        const lowest = HIGH - Math.floor(bottom / ROW_HEIGHT)
+        const highest = pitchAtRow(Math.floor(top / ROW_HEIGHT))
+        const lowest = pitchAtRow(Math.floor(bottom / ROW_HEIGHT))
         const hit = clip.notes
           .filter((n) => n.pitch <= highest && n.pitch >= lowest && n.start * pxPerTick < right && (n.start + n.length) * pxPerTick > left)
           .map((n) => n.id)
@@ -114,7 +142,7 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
     if (e.shiftKey || e.metaKey || e.ctrlKey) return beginMarquee(e)
     const rect = e.currentTarget.getBoundingClientRect()
     const start = snapTo((e.clientX - rect.left) / pxPerTick, snap, 'floor')
-    const pitch = clamp(HIGH - Math.floor((e.clientY - rect.top) / ROW_HEIGHT), LOW, HIGH)
+    const pitch = clamp(settle(pitchAtRow(Math.floor((e.clientY - rect.top) / ROW_HEIGHT)), -1, start), LOW, HIGH)
     if (start < 0 || start >= clip.length) return
     const room = clip.length - start
     const note: Note = { id: newId(), pitch, start, length: Math.min(lastLength.current, room), velocity: 0.8 }
@@ -162,7 +190,8 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
         // The whole selection moves by the same amount as the note being dragged.
         const start = clamp(snapTo(note.start + dx / pxPerTick, snap), 0, clip.length - snap)
         const shift = Math.max(-earliest, start - note.start)
-        const next = clamp(note.pitch - Math.round(dy / ROW_HEIGHT), LOW, HIGH)
+        // By rows, not semitones: folded, a row down is the next note of the key.
+        const next = clamp(settle(pitchAtRow(rowOf(note.pitch) + Math.round(dy / ROW_HEIGHT)), -dy, note.start + shift), LOW, HIGH)
         if (next !== pitch) {
           engine.noteOff(track.id, pitch)
           pitch = next
@@ -173,7 +202,8 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
           group,
           (n) => {
             const original = originals.get(n.id)!
-            return { ...n, start: original.start + shift, pitch: clamp(original.pitch + next - note.pitch, 0, 127) }
+            // The rest of the selection moves by as many semitones, each then settling on the key in its own right.
+            return { ...n, start: original.start + shift, pitch: clamp(n.id === note.id ? next : settle(original.pitch + next - note.pitch, next - note.pitch, original.start + shift), 0, 127) }
           },
           gesture
         )
@@ -215,6 +245,24 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
     startDrag(e, (dx) => engine.seek(at(startX + dx)))
   }
 
+  // The chord of each bar: the clip's own, or under a melody or a bass line the one the other tracks are playing.
+  const chords = drums ? [] : barChords(project, track, clip, bars, keyAtTick)
+  // The palette's chords are those of the key where the next chord would go: after what the clip already holds.
+  const paletteKey = keyOf({ start: clip.notes.reduce((end, note) => Math.max(end, note.start + note.length), 0) }) ?? key
+  const lastOwn = [...chords].reverse().find((chord) => chord && !chord.borrowed)
+  const barTicks = bars[0]?.length ?? PPQ * 4
+
+  /** Whether a note is outside the key where it falls. */
+  const outsideKey = (note: Note): boolean => {
+    const here = keyOf(note)
+    return !!here && !inKey(here, note.pitch)
+  }
+
+  /** One step up or down: a semitone, or with Lock on a step of the key. */
+  const nudge = (by: number): void => (lock && key ? stepNotesInKey(clip.id, selected, by, keyOf) : transposeNotes(clip.id, selected, by))
+  // The notes outside the key, among those the tools act on: the selection, or every note when none is selected.
+  const strays = clip.notes.filter((n) => (!selected.length || selected.includes(n.id)) && outsideKey(n)).map((n) => n.id)
+
   const selectAll = (): void => useStudio.setState({ selectedNoteIds: clip.notes.map((n) => n.id) })
   const grid = SNAP_OPTIONS.find(([, ticks]) => ticks === snap)?.[0] ?? ''
 
@@ -249,10 +297,10 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
           <Button title="Down an octave" disabled={!clip.notes.length} onClick={() => transposeNotes(clip.id, selected, -12)}>
             −12
           </Button>
-          <Button title="Down a semitone (↓)" disabled={!clip.notes.length} onClick={() => transposeNotes(clip.id, selected, -1)}>
+          <Button title={lock ? 'Down a step of the key (↓)' : 'Down a semitone (↓)'} disabled={!clip.notes.length} onClick={() => nudge(-1)}>
             −1
           </Button>
-          <Button title="Up a semitone (↑)" disabled={!clip.notes.length} onClick={() => transposeNotes(clip.id, selected, 1)}>
+          <Button title={lock ? 'Up a step of the key (↑)' : 'Up a semitone (↑)'} disabled={!clip.notes.length} onClick={() => nudge(1)}>
             +1
           </Button>
           <Button title="Up an octave" disabled={!clip.notes.length} onClick={() => transposeNotes(clip.id, selected, 12)}>
@@ -262,6 +310,27 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
         <span className="pr-scope" title="What Quantise and Transpose act on">
           {selected.length ? `${selected.length} selected` : 'All notes'}
         </span>
+        {!drums && (
+          <>
+            <span className="pr-sep" />
+            <KeyPicker at={clip.start} look="compact" />
+            {key && (
+              <>
+                <Toggle label="Lock: notes drawn or moved go only to notes of the key" size="sm" pressed={lock} onChange={(on) => setLayout({ scaleLock: on })}>
+                  Lock
+                </Toggle>
+                <Toggle label="Fold: show rows for the key's notes only" size="sm" pressed={fold} onChange={(on) => setLayout({ scaleFold: on })}>
+                  Fold
+                </Toggle>
+                {strays.length > 0 && (
+                  <Button title={`Move ${strays.length === 1 ? 'the note that is' : `the ${strays.length} notes that are`} outside the key to the nearest note in it`} onClick={() => fixNotesToKey(clip.id, strays, keyOf)}>
+                    Fix {strays.length}
+                  </Button>
+                )}
+              </>
+            )}
+          </>
+        )}
         <span className="pr-space" />
         <div className="pr-group" title="Zoom the piano roll">
           <IconButton label="Zoom out" size="sm" onClick={() => zoom(1 / 1.25)}>
@@ -272,6 +341,8 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
           </IconButton>
         </div>
       </div>
+
+      {paletteKey && <ChordBar track={track} clip={clip} songKey={paletteKey} barTicks={barTicks} lastDegree={lastOwn?.degree ?? null} />}
 
       <div className="pr-scroll" ref={scroller}>
         <div className="pr-ruler-row">
@@ -289,17 +360,45 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
           </div>
         </div>
 
-        <div className="pr-inner" style={{ height: PITCHES.length * ROW_HEIGHT }}>
+        {!drums && (
+          <div className="pr-chord-row">
+            <div className="pr-corner">Chord</div>
+            <div className="pr-chord-lane" style={{ width }}>
+              {bars.map((bar, i) => {
+                const chord = chords[i]
+                return (
+                  chord && (
+                    <div
+                      key={bar.index}
+                      className={`pr-chord ${chord.borrowed ? 'borrowed' : ''} ${key && !chord.numeral ? 'foreign' : ''}`}
+                      style={{ left: Math.max(0, (bar.start - clip.start) * pxPerTick), width: bar.length * pxPerTick }}
+                      title={
+                        (chord.borrowed ? `The other tracks play ${chord.name} in this bar` : `This bar is ${chord.name}`) +
+                        (chord.numeral ? `, the ${chord.numeral} chord of the key` : key ? ', which is not one of the key\u2019s chords' : '')
+                      }
+                    >
+                      <strong>{chord.name}</strong>
+                      {chord.numeral && <span>{chord.numeral}</span>}
+                    </div>
+                  )
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="pr-inner" style={{ height: rows.length * ROW_HEIGHT }}>
           <div className="pr-keys">
-            {PITCHES.map((pitch) => (
+            {rows.map((pitch) => (
               <div
                 key={pitch}
-                className={`pr-key ${isBlackKey(pitch) ? 'black' : ''} ${drums ? 'drum' : ''}`}
+                className={`pr-key ${isBlackKey(pitch) ? 'black' : ''} ${drums ? 'drum' : ''} ${key ? `named ${inKey(key, pitch) ? '' : 'out'} ${isRoot(key, pitch) ? 'root' : ''}` : ''}`}
                 style={{ height: ROW_HEIGHT }}
-                title={nameOf(pitch)}
+                title={key ? `${nameOf(pitch)}${isRoot(key, pitch) ? ', the root of the key' : inKey(key, pitch) ? ', in the key' : ', not in the key'}` : nameOf(pitch)}
                 onPointerDown={(e) => audition(e, pitch)}
               >
-                {drums ? DRUM_NAMES[pitch % 12] : pitch % 12 === 0 ? pitchName(pitch) : ''}
+                {/* With a key, every one of its notes is named: the keyboard is then a chart of the scale. */}
+                {drums ? DRUM_NAMES[pitch % 12] : key ? (inKey(key, pitch) ? noteName(pitch, key) : '') : pitch % 12 === 0 ? pitchName(pitch) : ''}
               </div>
             ))}
           </div>
@@ -310,9 +409,26 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
             onPointerDown={drawNote}
             onContextMenu={(e) => e.target === e.currentTarget && openMenu(e, noteItems(selected, selected.length ? `${selected.length} selected` : 'All notes'))}
           >
-            {PITCHES.map((pitch) => (
-              <div key={pitch} className={`pr-row ${isBlackKey(pitch) ? 'black' : ''} ${pitch % 12 === 0 ? 'octave' : ''}`} style={{ height: ROW_HEIGHT }} />
+            {rows.map((pitch) => (
+              <div
+                key={pitch}
+                className={`pr-row ${key && !keyed ? (isRoot(key, pitch) ? 'root' : inKey(key, pitch) ? 'in' : 'out') : isBlackKey(pitch) ? 'black' : ''} ${pitch % 12 === 0 ? 'octave' : ''}`}
+                style={{ height: ROW_HEIGHT }}
+              />
             ))}
+            {/* With a change of key in the clip, each stretch lights its own key's rows. */}
+            {keyed &&
+              inClip.map((segment) => {
+                const left = Math.max(0, (segment.tick - clip.start) * pxPerTick)
+                const right = Math.min(width, (segment.end - clip.start) * pxPerTick)
+                return (
+                  <div key={segment.id ?? 'start'} className={`pr-key-seg ${segment.tick > clip.start ? 'change' : ''}`} style={{ left, width: right - left }}>
+                    {rows.map((pitch) => (
+                      <div key={pitch} className={`pr-row ${isRoot(segment.key, pitch) ? 'root' : inKey(segment.key, pitch) ? 'in' : 'out'}`} style={{ height: ROW_HEIGHT }} />
+                    ))}
+                  </div>
+                )
+              })}
             {bars.map((bar) => (
               <div
                 key={bar.index}
@@ -326,18 +442,29 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
                 }}
               />
             ))}
+            {/* The root of each bar's chord, in every octave: where a bass note or a melody's resting note sits best. */}
+            {bars.map((bar, i) => {
+              const chord = chords[i]
+              if (!chord) return null
+              const left = Math.max(0, (bar.start - clip.start) * pxPerTick)
+              const right = Math.min(width, (bar.start + bar.length - clip.start) * pxPerTick)
+              return rows.map((pitch, row) =>
+                pitch % 12 === chord.root ? <div key={`${bar.index}:${pitch}`} className="pr-chord-root" style={{ left, width: right - left, top: row * ROW_HEIGHT, height: ROW_HEIGHT }} /> : null
+              )
+            })}
             {clip.notes.map((note) => {
               if (note.start < 0 || note.start >= clip.length) return null
               const noteWidth = Math.max(4, Math.min(note.length, clip.length - note.start) * pxPerTick - 1)
               const isSelected = selected.includes(note.id)
+              const outside = outsideKey(note)
               return (
                 <div
                   key={note.id}
-                  className={`pr-note ${isSelected ? 'selected' : ''}`}
-                  title={`${nameOf(note.pitch)} · velocity ${Math.round(note.velocity * 127)}`}
+                  className={`pr-note ${isSelected ? 'selected' : ''} ${outside ? 'outside' : ''}`}
+                  title={`${nameOf(note.pitch)}${outside ? ' · not in the key' : ''} · velocity ${Math.round(note.velocity * 127)}`}
                   style={{
                     left: note.start * pxPerTick,
-                    top: (HIGH - note.pitch) * ROW_HEIGHT,
+                    top: rowOf(note.pitch) * ROW_HEIGHT,
                     width: noteWidth,
                     height: ROW_HEIGHT - 1,
                     background: track.color,
@@ -355,7 +482,7 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
                     ])
                   }}
                 >
-                  {!drums && noteWidth >= 30 && <span className="pr-note-name">{pitchName(note.pitch)}</span>}
+                  {!drums && noteWidth >= 30 && <span className="pr-note-name">{nameOf(note.pitch)}</span>}
                   <div className="pr-note-resize" onPointerDown={(e) => dragNote(e, note, 'resize')} />
                 </div>
               )

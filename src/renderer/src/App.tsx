@@ -1,10 +1,12 @@
 import { useEffect } from 'react'
+import { keyAt } from '@shared/keymap'
 import { MENUS, matchesAccelerator } from '@shared/menu'
 import { Shell } from './components/Shell'
 import { engine } from './engine'
 import { bridge, runCommand } from './platform'
 import { togglePlay, toggleRecord } from './recording'
-import { addMarker, duplicateClips, findClip, removeClips, removeNotes, transposeNotes } from './state/actions'
+import { useLayout } from './components/layout'
+import { addMarker, duplicateClips, findClip, removeClips, removeNotes, stepNotesInKey, transposeNotes } from './state/actions'
 import { useStudio } from './state/store'
 import { isTyping } from './util'
 
@@ -31,7 +33,11 @@ export function App(): React.JSX.Element {
       const notes = open?.kind === 'midi' && selectedClipIds.length === 1 ? selectedNoteIds.filter((id) => open.notes.some((n) => n.id === id)) : []
       if (open && notes.length && ['delete', 'backspace', 'arrowup', 'arrowdown'].includes(key)) {
         e.preventDefault()
-        if (key === 'arrowup' || key === 'arrowdown') transposeNotes(open.id, notes, (key === 'arrowup' ? 1 : -1) * (e.shiftKey ? 12 : 1))
+        const up = key === 'arrowup' ? 1 : -1
+        // With the piano roll's Lock on, an arrow is a step of the key; Shift is an octave either way.
+        if ((key === 'arrowup' || key === 'arrowdown') && !e.shiftKey && project.key && useLayout.getState().scaleLock)
+          stepNotesInKey(open.id, notes, up, (note) => keyAt(project, open.start + note.start))
+        else if (key === 'arrowup' || key === 'arrowdown') transposeNotes(open.id, notes, up * (e.shiftKey ? 12 : 1))
         else removeNotes(open.id, notes)
         return
       }

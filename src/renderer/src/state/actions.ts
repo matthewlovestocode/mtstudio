@@ -24,6 +24,8 @@ import {
   type SfzInstrument,
   type SoundFontPreset
 } from '@shared/model'
+import { keyAt } from '@shared/keymap'
+import { inKey, nearestInKey, stepInKey, type Key } from '@shared/theory'
 import { timeMap, type TimeMap } from '@shared/timemap'
 import { useStudio } from './store'
 
@@ -386,7 +388,55 @@ export function transposeNotes(clipId: Id, ids: readonly Id[], semitones: number
   updateNotes(clipId, ids, (n) => ({ ...n, pitch: Math.min(127, Math.max(0, n.pitch + semitones)) }))
 }
 
+/** The key a note is to be judged by: the song's key where the note is, which a change of key makes differ along a clip. Null where there is none. */
+export type KeyOf = (note: Note) => Key | null
+
+/** Moves notes up or down their key's scale by a number of its steps, so they stay in the key. A note with no key moves by semitones. */
+export function stepNotesInKey(clipId: Id, ids: readonly Id[], steps: number, keyOf: KeyOf): void {
+  updateNotes(clipId, ids, (n) => {
+    const key = keyOf(n)
+    return { ...n, pitch: Math.min(127, Math.max(0, key ? stepInKey(key, n.pitch, steps) : n.pitch + steps)) }
+  })
+}
+
+/** Moves the notes that are outside their key to the nearest note in it. */
+export function fixNotesToKey(clipId: Id, ids: readonly Id[], keyOf: KeyOf): void {
+  updateNotes(clipId, ids, (n) => {
+    const key = keyOf(n)
+    return !key || inKey(key, n.pitch) ? n : { ...n, pitch: nearestInKey(key, n.pitch) }
+  })
+}
+
 // ── Project settings ─────────────────────────────────────────────────────
+
+/** Sets the key the song starts in, or (null) says it has none. */
+export function setKey(key: Key | null): void {
+  edit((p) => ({ ...p, key: key ?? undefined }))
+}
+
+/** Sets the key of one stretch of the song: the change of key with this id, or (null) the key it starts in. */
+export function setKeyOf(id: Id | null, key: Key): void {
+  if (id === null) return setKey(key)
+  edit((p) => ({ ...p, keyChanges: (p.keyChanges ?? []).map((change) => (change.id === id ? { ...change, key } : change)) }))
+}
+
+/**
+ * Adds a change of key at a bar, to `key` or else to the key already in
+ * force there (to be chosen after). Returns the new change's id; null if
+ * the song has no key to change from, or there is a change there already.
+ */
+export function addKeyChange(bar: number, key?: Key): Id | null {
+  const { project } = useStudio.getState()
+  if (bar <= 0 || !project.key || (project.keyChanges ?? []).some((change) => change.bar === bar)) return null
+  const id = newId()
+  const here = key ?? keyAt(project, timeMap(project).barStart(bar)) ?? project.key
+  edit((p) => ({ ...p, keyChanges: [...(p.keyChanges ?? []), { id, bar, key: here }] }))
+  return id
+}
+
+export function removeKeyChange(id: Id): void {
+  edit((p) => ({ ...p, keyChanges: (p.keyChanges ?? []).filter((change) => change.id !== id) }))
+}
 
 const clampBpm = (bpm: number): number => Math.min(300, Math.max(20, Math.round(bpm * 100) / 100))
 

@@ -2240,3 +2240,410 @@
   font: var(--text-xs) / 14px var(--font-ui);
   text-align: center;
 }
+
+/* ── Key ──────────────────────────────────────────────────────────────── */
+
+.studio .key-button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-lg);
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-well);
+  color: var(--ink-muted);
+  font: var(--weight-normal) var(--text-md) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.studio .key-button.compact {
+  height: var(--control-md);
+}
+
+.studio .key-button.set {
+  color: var(--ink);
+  font-weight: var(--weight-strong);
+}
+
+.studio .key-button:hover {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+.studio .key-button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.studio .pop.key-panel {
+  width: 268px;
+  max-width: none;
+  padding: var(--space-5);
+}
+
+.studio .key-head {
+  margin: var(--space-5) 0 var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--caps-spacing);
+  text-transform: uppercase;
+}
+
+.studio .key-head:first-child {
+  margin-top: 0;
+}
+
+.studio .key-roots {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-2);
+}
+
+.studio .key-scales {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.studio .key-guesses {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.studio .key-roots button,
+.studio .key-scales button,
+.studio .key-guesses button {
+  height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+  color: var(--ink);
+  font: var(--weight-normal) var(--text-sm) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.studio .key-scales button {
+  text-align: left;
+}
+
+.studio .key-guesses button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.studio .key-guesses span {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.studio .key-roots button:hover,
+.studio .key-scales button:hover,
+.studio .key-guesses button:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.studio .key-roots button.on,
+.studio .key-scales button.on,
+.studio .key-guesses button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: var(--weight-strong);
+}
+
+.studio .key-guesses button.on span {
+  color: inherit;
+}
+
+.studio .key-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.studio .key-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.studio .key-space {
+  flex: 1;
+}
+
+/* In the piano roll: the key's notes are lit, the rest dimmed, the root marked. */
+.studio .pr-row.out {
+  background: #101216;
+  border-bottom-color: #14171c;
+}
+
+.studio .pr-row.in {
+  background: #1e222a;
+}
+
+.studio .pr-row.root {
+  background: color-mix(in srgb, var(--accent) 13%, #1e222a);
+}
+
+.studio .pr-key.out {
+  filter: brightness(0.55);
+}
+
+.studio .pr-key.root {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.studio .pr-key.named {
+  font-size: 8.5px;
+}
+
+/* A note that is not in the key: hatched, with a broken outline. */
+.studio .pr-note.outside {
+  background-image: repeating-linear-gradient(135deg, rgb(0 0 0 / 0.45) 0 3px, transparent 3px 6px);
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+.studio .pr-note.outside.selected {
+  box-shadow: inset 0 0 0 1.5px #fff, 0 0 0 1px var(--danger);
+}
+
+.studio .pr-outside {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+/* ── Chords ───────────────────────────────────────────────────────────── */
+
+/* The palette under the piano roll's toolbar. */
+.studio .cb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 40px;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-panel);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.studio .cb-chords {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* A chord: its name and place to hear it, and a plus to add it. */
+.studio .cb-chord {
+  display: flex;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  overflow: hidden;
+}
+
+.studio .cb-play,
+.studio .cb-add {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--weight-normal) var(--text-md) / 1 var(--font-ui);
+}
+
+.studio .cb-play {
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 1px;
+  min-width: 46px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+}
+
+.studio .cb-play strong {
+  font-weight: var(--weight-strong);
+}
+
+.studio .cb-play span {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.studio .cb-add {
+  width: 22px;
+  padding: 0;
+  border-left: 1px solid var(--border);
+  color: var(--ink-muted);
+  font-size: var(--text-lg);
+}
+
+.studio .cb-play:hover,
+.studio .cb-add:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.studio .cb-play:focus-visible,
+.studio .cb-add:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* What tends to come next: a strong move is ringed and marked, a common one ringed more faintly, the rest left plain. */
+.studio .cb-chord.strong {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px var(--ok);
+}
+
+.studio .cb-chord.strong .cb-play span::after {
+  content: ' ●';
+  color: var(--ok);
+}
+
+.studio .cb-chord.common {
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--border));
+}
+
+.studio .cb-chord.last {
+  background: var(--accent-wash);
+}
+
+.studio .cb-picker {
+  flex: none;
+  width: 196px;
+}
+
+.studio .cb-picker .btn {
+  width: 100%;
+}
+
+/* In the roll: the chord of each bar, named above the notes. */
+.studio .pr-chord-row {
+  position: sticky;
+  top: 18px;
+  z-index: 5;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  height: 20px;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.studio .pr-chord-row .pr-corner {
+  padding: 0 var(--space-2);
+  color: var(--ink-faint);
+  font-size: 9px;
+  letter-spacing: var(--caps-spacing);
+  line-height: 19px;
+  text-transform: uppercase;
+}
+
+.studio .pr-chord-lane {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+}
+
+.studio .pr-chord {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-left: 5px;
+  border-left: 1px solid var(--border-strong);
+  line-height: 19px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.studio .pr-chord strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+
+.studio .pr-chord span {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/* Read from the other tracks, not from this clip. */
+.studio .pr-chord.borrowed strong {
+  color: var(--ink-muted);
+  font-weight: var(--weight-normal);
+  font-style: italic;
+}
+
+/* Not one of the key's chords. */
+.studio .pr-chord.foreign strong {
+  color: var(--warn);
+}
+
+.studio .pr-chord-root {
+  position: absolute;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--warn) 55%, transparent);
+  pointer-events: none;
+}
+
+/* ── Changes of key ───────────────────────────────────────────────────── */
+
+/* In the timeline's Key row. */
+.studio .key-button.marker {
+  height: 18px;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.studio .key-button.marker .caret {
+  width: 9px;
+  height: 9px;
+}
+
+.studio .tl .tl-key {
+  padding: 1px 0 1px 3px;
+}
+
+.studio .tl-key-none {
+  padding-left: var(--space-4);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  line-height: 21px;
+}
+
+.studio .key-near button {
+  height: auto;
+  min-height: var(--control-md);
+  padding: var(--space-2) var(--space-3);
+  gap: var(--space-4);
+  white-space: normal;
+  text-align: left;
+}
+
+.studio .key-near span {
+  text-align: right;
+}
+
+/* In the piano roll: a stretch of the clip in one key, lit by that key's notes. */
+.studio .pr-key-seg {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+
+.studio .pr-key-seg.change {
+  box-shadow: -2px 0 0 var(--accent);
+}

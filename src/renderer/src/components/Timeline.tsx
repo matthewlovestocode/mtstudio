@@ -13,8 +13,11 @@ import {
 } from '@shared/model'
 import { engine } from '../engine'
 import { importAudioFiles, runCommand } from '../platform'
+import { keySegments } from '@shared/keymap'
+import { keyName } from '@shared/theory'
 import { timeMap, type Bar, type TimeMap } from '@shared/timemap'
 import {
+  addKeyChange,
   addMarker,
   addMeterChange,
   addMidiClip,
@@ -23,6 +26,7 @@ import {
   findClip,
   placeClips,
   removeClips,
+  removeKeyChange,
   removeMarker,
   removeMeterChange,
   removeTempoChange,
@@ -41,6 +45,7 @@ import { assetInfo, MAX_ZOOM, MIN_ZOOM, useStudio } from '../state/store'
 import { snapTo, startDrag, useFrame } from '../util'
 import { NumberField, TextField } from './controls/fields'
 import { IconButton } from './controls/buttons'
+import { KeyPicker } from './KeyPicker'
 import { Caret, useMenu, type MenuItem } from './controls/Popover'
 import { HEADER_WIDTH, SNAP_BAR, SNAP_OFF, SNAP_OPTIONS, setLayout, useLayout } from './layout'
 import { TrackHeader } from './TrackHeader'
@@ -70,7 +75,7 @@ const TRACK_HEIGHT = 72
 const RULER_HEIGHT = 26
 const GLOBAL_ROW_HEIGHT = 22
 const CLIP_BODY_HEIGHT = 46
-const GLOBAL_ROWS = 3
+const GLOBAL_ROWS = 4
 /** Must match the loop band's height in next.css. */
 const LOOP_BAND = 9
 /**
@@ -255,6 +260,7 @@ export function Timeline(): React.JSX.Element {
           <>
             <TempoRow map={map} pxPerTick={pxPerTick} snap={snap} openMenu={openMenu} />
             <MeterRow map={map} pxPerTick={pxPerTick} openMenu={openMenu} />
+            <KeyRow project={project} map={map} pxPerTick={pxPerTick} openMenu={openMenu} />
             <MarkerRow project={project} map={map} pxPerTick={pxPerTick} snap={snap} openMenu={openMenu} />
           </>
         )}
@@ -277,7 +283,7 @@ export function Timeline(): React.JSX.Element {
 function MarkerRow({ project, map, pxPerTick, snap, openMenu }: { project: Project; map: TimeMap; pxPerTick: number; snap: number; openMenu: OpenMenu }): React.JSX.Element {
   const snapped = snapper(snap, map)
   return (
-    <div className="global-row" style={{ top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * 2 }}>
+    <div className="global-row" style={{ top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * 3 }}>
       <div className="corner" style={{ width: HEADER_WIDTH }}>
         Markers
       </div>
@@ -407,6 +413,53 @@ function MeterRow({ map, pxPerTick, openMenu }: { map: TimeMap; pxPerTick: numbe
             />
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** The key along the song: the one it starts in, and each change of key, which always falls on a bar line. */
+function KeyRow({ project, map, pxPerTick, openMenu }: { project: Project; map: TimeMap; pxPerTick: number; openMenu: OpenMenu }): React.JSX.Element {
+  const segments = keySegments(project)
+  /** The change of key just made, whose key picker opens by itself so the key can be chosen straight away. */
+  const [fresh, setFresh] = useState<string | null>(null)
+  const barAt = (e: React.MouseEvent<HTMLDivElement>): number => map.barAt((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick).index
+  const add = (bar: number): void => setFresh(addKeyChange(bar))
+  return (
+    <div className="global-row" style={{ top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * 2 }}>
+      <div className="corner" style={{ width: HEADER_WIDTH }}>
+        Key
+      </div>
+      <div
+        className="global-lane"
+        title={project.key ? 'Double-click to change key at that bar. Right-click for more.' : 'Set a key first (in the bar across the top); then double-click here to change key at a bar.'}
+        onDoubleClick={(e) => {
+          if (e.target === e.currentTarget) add(barAt(e))
+        }}
+        onContextMenu={(e) => {
+          const bar = barAt(e)
+          openMenu(e, [{ label: `Change Key at Bar ${bar + 1}`, disabled: bar <= 0 || !project.key, onSelect: () => add(bar) }])
+        }}
+      >
+        {segments.map((segment) => (
+          <div
+            className="marker tl-key"
+            key={segment.id ?? 'start'}
+            style={{ left: segment.tick * pxPerTick }}
+            onContextMenu={(e) =>
+              openMenu(e, [
+                { heading: keyName(segment.key) },
+                { label: 'Move Playhead Here', onSelect: () => engine.seek(segment.tick) },
+                { separator: true },
+                // The key the song starts in can be changed but not removed from here.
+                { label: 'Delete Key Change', danger: true, disabled: !segment.id, onSelect: () => segment.id && removeKeyChange(segment.id) }
+              ])
+            }
+          >
+            <KeyPicker at={segment.tick} look="marker" openNow={segment.id !== null && segment.id === fresh} />
+          </div>
+        ))}
+        {segments.length === 0 && <span className="tl-key-none">No key set</span>}
       </div>
     </div>
   )

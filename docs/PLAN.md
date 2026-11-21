@@ -85,6 +85,38 @@ transport bar saying which engine is in use.
   the ruler; a menu on right-click for clips, lanes, the ruler and markers.
 - **Clip editors:** the piano roll (`PianoRoll.tsx`) and, for audio clips,
   a waveform with the clip's settings beside it (`AudioClipEditor.tsx`).
+- **Key (`shared/theory.ts`, `KeyPicker.tsx`):** a project can say what key
+  it is in (`Project.key`: a root and one of ten scales), set from the
+  transport bar or guessed from the notes already written (the
+  Krumhansl-Kessler profiles, major and minor only). It changes nothing
+  that is heard. The piano roll goes by it: the key's notes are lit and
+  named and the rest dimmed, the root marked, and a note outside the key
+  hatched. Lock keeps drawn and dragged notes on the key and makes a
+  nudge a step of the scale; Fold leaves rows for the key's notes only;
+  Fix moves stray notes to the nearest that belongs; and the typing
+  keyboard can be made to play up the scale. Drums are left out of all of
+  it.
+- **Changes of key (`shared/keymap.ts`):** the key can change at any bar
+  (`Project.keyChanges`), shown and made in a Key row of the timeline
+  under Signature. Everything that goes by the key asks which is in force
+  at a tick: the piano roll lights each stretch of a clip by its own key
+  and judges each note by the key where it falls, the chord palette shows
+  the chords of the key where the next chord would go, the transport bar
+  shows the key at the playhead. A new change offers the keys that sit
+  near the one before it: its relative, a fifth either way, the same root
+  in the other mode, and the step up of a last chorus, each with how many
+  notes it shares. Nothing transposes what is already written.
+- **Chords (`ChordBar.tsx`, `harmony.ts`, `shared/theory.ts`):** with a key
+  set, the piano roll has a palette of the key's seven chords, each named
+  and numbered (I, ii, V …). A chord can be heard, and added after what
+  the clip holds, so a progression is built a chord at a time; the chords
+  that most often follow the last one are marked, strongly or faintly,
+  from a table of the usual moves in major and in minor keys (the modes
+  have none). Eighteen progressions can be laid down to start from. Above
+  the notes each bar's chord is named, read from the clip where it plays
+  three notes together and otherwise from the other tracks (so a bass
+  line or a melody shows the chord it is over), and that chord's root is
+  underlined in every octave.
 - **Step sequencer (`StepSequencer.tsx`, `drums.ts`):** a MIDI clip seen as
   a grid, a row to a drum and a column to a step, for building a beat by
   switching hits on and off. Clips on drum tracks open in it; a switch in

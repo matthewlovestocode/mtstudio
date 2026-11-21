@@ -5,6 +5,8 @@
  * All musical positions and lengths are in ticks (see PPQ).
  */
 
+import type { Key } from './theory'
+
 /** Ticks per quarter note. */
 export const PPQ = 960
 
@@ -233,6 +235,13 @@ export interface MeterChange {
   denominator: number
 }
 
+/** A change of key, at the start of a bar. */
+export interface KeyChange {
+  id: Id
+  bar: number
+  key: Key
+}
+
 /** A named position on the timeline. */
 export interface Marker {
   id: Id
@@ -252,6 +261,9 @@ export interface Project {
   tempoChanges?: TempoChange[]
   meterChanges?: MeterChange[]
   markers?: Marker[]
+  /** The key the song starts in, if one has been set, and the changes of key after it (see `keySegments`). They guide the editors and change nothing that is heard. */
+  key?: Key
+  keyChanges?: KeyChange[]
   loop: LoopRegion
   tracks: Track[]
   assets: Record<Id, AudioAsset>
