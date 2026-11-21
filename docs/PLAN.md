@@ -150,21 +150,24 @@ Left over:
   for instruments, plugins and files
 - The mixer has no sends, effect slots or master fader
 
-### Bass lines (`src/renderer/src/bass.ts`)
+### Parts: bass, chords, synth (`src/renderer/src/parts.ts`)
 
-- The piano roll's "Start from a bass line…" offers lines in the styles of
-  the drum patterns (trap, drill, dancehall, reggaeton and reggae to begin
-  with). A line is written against a chord (`1` root, `5` fifth, `8`
-  octave…), so `bassNotes` puts it in the key, over the chord the other
-  tracks play in each bar, or over a round of the key's chords that suits
-  the style where they play none. Every fourth bar leans into the next,
-  and the second four of eight reach up an octave.
-- Over drums it locks to the kick: lines marked `follow` are rebuilt with
-  a note on every kick, and the rest have notes a sixteenth from a kick
-  moved onto it. The kick is read from the drum clips when the line is
-  chosen; it does not track later edits to the drums.
-- Left: glide between notes for 808 slides; chord and synth parts; an
-  instrument per style, as the drum kits have.
+- The piano roll's "Start from a part…" offers bass lines, chord parts
+  and figures for a synth or lead, in the styles of the drum patterns
+  (trap, drill, dancehall, reggaeton, reggae and house, and plain
+  arpeggios). A part is written against a chord (`1` root, `5` fifth,
+  `8` octave…; chords as a rhythm of hits), so `partNotes` puts it in the
+  key, over the chord the clip already holds or the other tracks play in
+  each bar, or over a round of the key's chords that suits the style
+  where there is none. Chords are voiced within one octave so they move
+  little from one to the next. Every fourth bar leans or pushes into the
+  next, and the second four of eight reach up.
+- Over drums a bass line locks to the kick: lines marked `follow` are
+  rebuilt with a note on every kick, and the rest have notes a sixteenth
+  from a kick moved onto it. The kick is read from the drum clips when
+  the line is chosen; it does not track later edits to the drums.
+- Left: glide between notes for 808 slides; an instrument per style, as
+  the drum kits have.
 
 ### Instruments and sound content
 

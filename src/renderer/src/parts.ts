@@ -1,8 +1,9 @@
 /**
- * Bass lines to start from, the companions of the drum patterns in
- * drums.ts. A line is written against a chord, not in notes, so it comes
- * out in the project's key, moves with the chords the other tracks play,
- * and can lock to the kick of the drums it sits over.
+ * Parts to start from, the companions of the drum patterns in drums.ts:
+ * bass lines, chords, and figures for a synth or a lead. A part is written
+ * against a chord, not in notes, so it comes out in the project's key and
+ * moves with the chords the other tracks play; a bass line can also lock
+ * to the kick of the drums it sits over.
  */
 import { newId, PPQ, type MidiClip, type Note, type Project, type Track } from '@shared/model'
 import { keyAt } from '@shared/keymap'
@@ -12,16 +13,23 @@ import { isDrumTrack, kitFor, seeded, SWING } from './drums'
 import { barChords } from './harmony'
 
 /**
- * A bass line, a sixteenth to a character, one bar (16) or two (32) long.
- * `1` is the chord's root, `3` its third, `5` its fifth, `8` the root an
+ * A part, a sixteenth to a character, one bar (16) or two (32) long.
+ *
+ * A bass line or a lead is a line of notes: `1` is the chord's root, `3` its third, `5` its fifth, `8` the root an
  * octave up and `v` the fifth below; `2`, `4` and `7` are those steps of
  * the key above the root and `l` the step of the key below it. `=` holds
  * the note before it and `-` is a rest.
+ *
+ * Chords are a rhythm, the whole chord on each hit: `x` a hit, `X` a
+ * strong one, `o` a soft one, `=` and `-` as above.
  */
-export interface BassLine {
+export interface Part {
   name: string
   style: string
   group: string
+  kind: 'bass' | 'chords' | 'lead'
+  /** How chords are spread: around middle C, higher, with the seventh, or wide with the root underneath. */
+  voicing?: 'mid' | 'high' | 'seventh' | 'wide'
   /** A tempo it sits well at, as a hint. */
   bpm: string
   line: string
@@ -33,7 +41,7 @@ export interface BassLine {
   follow?: 'long' | 'short'
 }
 
-export const BASS_LINES: BassLine[] = [
+const BASS: Omit<Part, 'kind'>[] = [
   { name: '808, long', style: 'Trap', group: '808', bpm: '130–150', line: '1===============1=========5=====' },
   { name: '808, on the kick', style: 'Trap', group: '808', bpm: '130–150', line: '1=====1===1==1==', follow: 'long' },
   { name: '808, bouncy', style: 'Trap', group: '808', bpm: '130–150', line: '1==1==1=--1=1=--' },
@@ -88,14 +96,73 @@ export const BASS_LINES: BassLine[] = [
   { name: 'Reggae bass, on the kick', style: 'Reggae', group: 'Other', bpm: '70–85', line: '--------1=======', follow: 'long' }
 ]
 
-/** The order of the groups within each style. */
-export const BASS_GROUPS: Record<string, string[]> = {
-  Trap: ['808'],
-  Drill: ['808'],
-  Dancehall: ['Womp', 'Modern', 'Trap dancehall'],
-  Reggaeton: ['Tresillo', 'Other'],
-  Reggae: ['Roots', 'Other']
-}
+const CHORDS: Part[] = [
+  { name: 'Skank', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–90', line: '--x---x---x---x-', voicing: 'high' },
+  { name: 'Skank, double', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–90', line: '--xo--xo--xo--xo', voicing: 'high' },
+  { name: 'Organ bubble', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–90', line: 'o-xoo-xoo-xoo-xo', voicing: 'mid' },
+  { name: 'Ska upstroke', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '110–130', line: '--X---X---X---X-', voicing: 'high' },
+  { name: 'One drop chords', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–85', line: '----x=------x=--', voicing: 'mid' },
+  { name: 'Dub stabs', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–85', line: '--x-----------x-', voicing: 'high' },
+  { name: 'Lovers pad', style: 'Reggae', group: 'Chords', kind: 'chords', bpm: '70–85', line: 'X===============', voicing: 'wide' },
+  { name: 'Dancehall stabs', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '90–105', line: 'x--x--x-x--x--x-', voicing: 'high' },
+  { name: 'Dancehall stabs, offbeat', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '90–105', line: '--x---x---x--x--', voicing: 'high' },
+  { name: 'Dancehall stabs, sparse', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '90–105', line: 'x-----x---------', voicing: 'mid' },
+  { name: '90s stabs', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '92–104', line: '---x--x----x--x-', voicing: 'high' },
+  { name: 'Dancehall organ', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '90–105', line: 'x=-x=-x=x=-x=-x=', voicing: 'mid' },
+  { name: 'Dancehall pad', style: 'Dancehall', group: 'Chords', kind: 'chords', bpm: '90–105', line: 'X===============', voicing: 'wide' },
+  { name: 'Reggaeton chords', style: 'Reggaeton', group: 'Chords', kind: 'chords', bpm: '88–100', line: 'X--x--x-X--x--x-', voicing: 'mid' },
+  { name: 'Reggaeton stabs, offbeat', style: 'Reggaeton', group: 'Chords', kind: 'chords', bpm: '88–100', line: '--x---x---x---x-', voicing: 'high' },
+  { name: 'Reggaeton piano', style: 'Reggaeton', group: 'Chords', kind: 'chords', bpm: '88–100', line: 'X==x==x=--x=x=--', voicing: 'seventh' },
+  { name: 'Reggaeton pad', style: 'Reggaeton', group: 'Chords', kind: 'chords', bpm: '88–100', line: 'X===============', voicing: 'wide' },
+  { name: 'Trap pad', style: 'Trap', group: 'Chords', kind: 'chords', bpm: '130–150', line: 'X===============', voicing: 'wide' },
+  { name: 'Trap piano', style: 'Trap', group: 'Chords', kind: 'chords', bpm: '130–150', line: 'X=====x===x=----', voicing: 'seventh' },
+  { name: 'Trap stabs', style: 'Trap', group: 'Chords', kind: 'chords', bpm: '130–150', line: 'X-------x-----x-', voicing: 'mid' },
+  { name: 'Drill piano', style: 'Drill', group: 'Chords', kind: 'chords', bpm: '138–145', line: 'X==x====--x==x==', voicing: 'seventh' },
+  { name: 'Drill pad', style: 'Drill', group: 'Chords', kind: 'chords', bpm: '138–145', line: 'X===============', voicing: 'wide' },
+  { name: 'House stabs', style: 'House', group: 'Chords', kind: 'chords', bpm: '120–128', line: 'x--x--x---x--x--', voicing: 'seventh' },
+  { name: 'House stabs, offbeat', style: 'House', group: 'Chords', kind: 'chords', bpm: '120–128', line: '--x---x---x---x-', voicing: 'high' },
+  { name: 'House piano', style: 'House', group: 'Chords', kind: 'chords', bpm: '120–128', line: 'X--x--x--x--x-x-', voicing: 'mid' },
+  { name: 'Organ stabs', style: 'House', group: 'Chords', kind: 'chords', bpm: '120–128', line: '--x-x---x-x--x--', voicing: 'mid' },
+  { name: 'House pad', style: 'House', group: 'Chords', kind: 'chords', bpm: '120–128', line: 'X===============', voicing: 'wide' }
+]
+
+const LEADS: Part[] = [
+  { name: 'Bell melody', style: 'Trap', group: 'Synth and melody', kind: 'lead', bpm: '130–150', line: '8=--5=--3=--5=7=8=--5=--3=1=----' },
+  { name: 'Dark bells', style: 'Trap', group: 'Synth and melody', kind: 'lead', bpm: '130–150', line: '5=--3=--1=--l=--' },
+  { name: 'Pluck arp', style: 'Trap', group: 'Synth and melody', kind: 'lead', bpm: '130–150', line: '1-5-8-5-3-5-8-5-' },
+  { name: 'Flute riff', style: 'Trap', group: 'Synth and melody', kind: 'lead', bpm: '130–150', line: '5===--3=5=7=5===' },
+  { name: 'Drill piano riff', style: 'Drill', group: 'Synth and melody', kind: 'lead', bpm: '138–145', line: '1=--5=--8=7=5=--3=--5=--2=1=----' },
+  { name: 'Drill strings', style: 'Drill', group: 'Synth and melody', kind: 'lead', bpm: '138–145', line: '8=====7=5=======' },
+  { name: 'Drill bells', style: 'Drill', group: 'Synth and melody', kind: 'lead', bpm: '138–145', line: '8=--7=--5=--3=5=' },
+  { name: 'Dancehall riff', style: 'Dancehall', group: 'Synth and melody', kind: 'lead', bpm: '90–105', line: '5=-5=-3=5=-5=-1=' },
+  { name: 'Dancehall pluck', style: 'Dancehall', group: 'Synth and melody', kind: 'lead', bpm: '90–105', line: '8=-5=-3=8=-5=-3=' },
+  { name: 'Steel pan riff', style: 'Dancehall', group: 'Synth and melody', kind: 'lead', bpm: '90–105', line: '3=5=8=--5=3=1=--' },
+  { name: 'Dancehall hook', style: 'Dancehall', group: 'Synth and melody', kind: 'lead', bpm: '90–105', line: '5=====3=5=7=8===5=====3=2=1=----' },
+  { name: 'Reggaeton pluck', style: 'Reggaeton', group: 'Synth and melody', kind: 'lead', bpm: '88–100', line: '1=-3=-5=8=-5=-3=' },
+  { name: 'Reggaeton guitar', style: 'Reggaeton', group: 'Synth and melody', kind: 'lead', bpm: '88–100', line: '1=3=5=3=8=5=3=5=' },
+  { name: 'Reggaeton marimba', style: 'Reggaeton', group: 'Synth and melody', kind: 'lead', bpm: '88–100', line: '5--3--1-5--3--1-' },
+  { name: 'Reggaeton hook', style: 'Reggaeton', group: 'Synth and melody', kind: 'lead', bpm: '88–100', line: '8=======7=5=3=5=' },
+  { name: 'Guitar pick', style: 'Reggae', group: 'Synth and melody', kind: 'lead', bpm: '70–85', line: '----1=3=5=3=1===' },
+  { name: 'Horn line', style: 'Reggae', group: 'Synth and melody', kind: 'lead', bpm: '70–85', line: '5===3=1=--------1=3=5===3=------' },
+  { name: 'Melodica', style: 'Reggae', group: 'Synth and melody', kind: 'lead', bpm: '70–85', line: '8=7=5=--3=5=----' },
+  { name: 'House pluck', style: 'House', group: 'Synth and melody', kind: 'lead', bpm: '120–128', line: '1--5--8-1--5--8-' },
+  { name: 'House riff', style: 'House', group: 'Synth and melody', kind: 'lead', bpm: '120–128', line: '8=--7=5=--3=5=--' },
+  { name: 'Arp, up', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '1358135813581358' },
+  { name: 'Arp, down', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '8531853185318531' },
+  { name: 'Arp, up and down', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '1358531358531358' },
+  { name: 'Arp, eighths', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '1=3=5=8=5=3=1=3=' },
+  { name: 'Arp, broken', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '1=5=3=8=5=3=5=1=' },
+  { name: 'Arp, with seventh', style: 'Arpeggios', group: 'Synth and melody', kind: 'lead', bpm: 'any', line: '1=3=5=7=8=7=5=3=' }
+]
+
+export const PARTS: Part[] = [...BASS.map((each): Part => ({ ...each, kind: 'bass' })), ...CHORDS, ...LEADS]
+
+/** What a part is listed under within its style: bass lines by their groups, then chords, then the rest. */
+export const headingOf = (part: Part): string => (part.kind === 'bass' ? `Bass · ${part.group}` : part.group)
+const KINDS = ['bass', 'chords', 'lead']
+const BASS_GROUPS = ['808', 'Womp', 'Modern', 'Trap dancehall', 'Tresillo', 'Roots', 'Other']
+/** Parts in the order they are listed within a style. */
+export const partOrder = (a: Part, b: Part): number => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || BASS_GROUPS.indexOf(a.group) - BASS_GROUPS.indexOf(b.group)
 
 /**
  * Where the bass goes bar by bar when no other track is playing chords to
@@ -106,7 +173,9 @@ const MOVES: Record<string, number[]> = {
   Drill: [0, 0, 5, 4],
   Dancehall: [0, 0, 0, 6],
   Reggaeton: [0, 5, 2, 6],
-  Reggae: [0, 0, 3, 3]
+  Reggae: [0, 0, 3, 3],
+  House: [0, 5, 3, 4],
+  Arpeggios: [0, 5, 2, 6]
 }
 
 /**
@@ -124,20 +193,23 @@ const SIXTEENTH = PPQ / 4
 const BAR = 16
 /** The lowest note a root is put on: E1, the bottom string of a bass. Roots fall in the octave from there. */
 const LOWEST = 28
+/** And the lowest a lead's root is put on: the F above middle C. */
+const LEAD_LOWEST = 65
 const mod12 = (n: number): number => ((n % 12) + 12) % 12
 
 /** What a bar's notes are measured from. */
 interface Harmony {
   /** The root's pitch, in the bass's bottom octave. */
   root: number
-  /** Semitones from the root to the chord's third and fifth. */
+  /** Semitones from the root to the chord's third and fifth, and to the seventh the key puts on top of it. */
   third: number
   fifth: number
+  seventh: number
   key: Key
 }
 
 /** The pitch a character of a line stands for over a harmony. */
-function pitchOf(mark: string, { root, third, fifth, key }: Harmony): number {
+function pitchOf(mark: string, { root, third, fifth, key }: Harmony, floor = LOWEST): number {
   /** The first of some distances above the root that is in the key. */
   const step = (...semitones: number[]): number => root + (semitones.find((each) => inKey(key, root + each)) ?? semitones[0])
   switch (mark) {
@@ -149,7 +221,7 @@ function pitchOf(mark: string, { root, third, fifth, key }: Harmony): number {
       return root + 12
     case 'v':
       // Below the root, unless that is lower than a bass goes.
-      return root + fifth - 12 >= LOWEST - 5 ? root + fifth - 12 : root + fifth
+      return root + fifth - 12 >= floor - 5 ? root + fifth - 12 : root + fifth
     case '2':
       return step(2, 1)
     case '4':
@@ -184,17 +256,18 @@ function kicksUnder(project: Project, start: number, length: number): number[] {
 }
 
 /**
- * The notes that play a bass line in a clip at `start` for `length` ticks.
+ * The notes that play a part in `clip`, made `length` ticks long.
  *
- * Each bar is played over the chord the other tracks have there; where
- * they have none, over a round of the key's chords that suits the style.
+ * Each bar is played over the chord the clip already has there, or the
+ * other tracks have; where there is none, over a round of the key's chords that suits the style.
  * Like the drum patterns it goes somewhere: every fourth bar ends by
  * leaning into the next, and in the second four of eight the line reaches
  * up an octave. Over drums it locks to the kick: a line marked `follow` is
  * rebuilt on the kicks, and any other has notes that fall a sixteenth from
  * a kick moved onto it. The same line always comes out the same.
  */
-export function bassNotes(line: BassLine, project: Project, track: Track, start: number, length: number): Note[] {
+export function partNotes(line: Part, project: Project, track: Track, clip: MidiClip, length: number): Note[] {
+  const start = clip.start
   const map = timeMap(project)
   const steps = Math.ceil(length / SIXTEENTH)
   const bars = Math.max(1, Math.ceil(steps / BAR))
@@ -207,8 +280,8 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
     spans.push(bar)
     tick = bar.start + bar.length
   }
-  const silent = { id: '', kind: 'midi', name: '', start, length, notes: [] } as MidiClip
-  const heard = barChords(project, track, silent, spans, (tick) => keyAt(project, tick))
+  // The chords the clip already holds are kept: a new rhythm for them, not new chords. Otherwise they are the other tracks'.
+  const heard = barChords(project, track, { ...clip, length }, spans, (tick) => keyAt(project, tick))
   const following = heard.some(Boolean)
   /** How many bars the chords run for before they stop. */
   const round = heard.reduce((end, chord, bar) => (chord ? bar + 1 : end), 0)
@@ -230,13 +303,20 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
       continue
     }
     if (!tones) tones = keyChords(key)[moves[bar % moves.length] % 7].tones
-    const root = LOWEST + mod12(tones[0] - LOWEST)
-    last = { root, third: mod12(tones[1] - tones[0]), fifth: mod12(tones[2] - tones[0]), key }
+    // A bass has its roots in its bottom octave; a lead in the octave from the F above middle C.
+    const floor = line.kind === 'lead' ? LEAD_LOWEST : LOWEST
+    const root = floor + mod12(tones[0] - floor)
+    last = { root, third: mod12(tones[1] - tones[0]), fifth: mod12(tones[2] - tones[0]), seventh: inKey(key, tones[0] + 10) ? 10 : 11, key }
     harmony.push(last)
   }
 
+  const late = Math.round((SWING[line.name] ?? SWING[line.style] ?? 0) * SIXTEENTH * 0.5)
+  if (line.kind === 'chords') return chordNotes(line, harmony, steps, length, late, random)
+  const floor = line.kind === 'lead' ? LEAD_LOWEST : LOWEST
+
   // ── The line, laid out and made to go somewhere.
-  const kicks = kicksUnder(project, start, length)
+  // Only a bass locks to the kick.
+  const kicks = line.kind === 'bass' ? kicksUnder(project, start, length) : []
   const marks = Array.from({ length: steps }, (_, step) => line.line[step % line.line.length])
   const onKicks = line.follow && kicks.length >= 2
   if (!onKicks && bars >= 4) {
@@ -265,7 +345,6 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
     velocity: number
   }
   let placed: Placed[] = []
-  const late = Math.round((SWING[line.name] ?? SWING[line.style] ?? 0) * SIXTEENTH * 0.5)
   const loud = (step: number): number => Math.min(1, (step % BAR === 0 ? 0.95 : step % 4 === 0 ? 0.86 : 0.78) * (0.95 + random() * 0.1))
 
   if (onKicks) {
@@ -276,7 +355,7 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
       const closes = Math.floor(next / (SIXTEENTH * BAR)) > bar && bar % 2 === 1 && at % (SIXTEENTH * BAR) >= SIXTEENTH * 8
       const mark = closes ? (random() < 0.5 ? '5' : '8') : '1'
       const reach = line.follow === 'long' ? next - at : Math.min(next - at, SIXTEENTH * 2)
-      placed.push({ start: at, length: Math.max(SIXTEENTH / 2, reach - 20), pitch: pitchOf(mark, harmony[bar]), velocity: loud(Math.round(at / SIXTEENTH)) })
+      placed.push({ start: at, length: Math.max(SIXTEENTH / 2, reach - 20), pitch: pitchOf(mark, harmony[bar], floor), velocity: loud(Math.round(at / SIXTEENTH)) })
     })
   } else {
     for (let step = 0; step < steps; step++) {
@@ -286,7 +365,7 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
       while (step + held < steps && marks[step + held] === '=') held++
       const bar = Math.min(bars - 1, Math.floor(step / BAR))
       // The lean-in is measured from the bar it leans into; at the end of the clip that is the bar it loops back to.
-      const pitch = mark === '>' ? pitchOf('l', harmony[(bar + 1) % bars]) : pitchOf(mark, harmony[bar])
+      const pitch = mark === '>' ? pitchOf('l', harmony[(bar + 1) % bars], floor) : pitchOf(mark, harmony[bar], floor)
       placed.push({ start: step * SIXTEENTH + (step % 2 === 1 ? late : 0), length: held * SIXTEENTH - 20, pitch, velocity: loud(step) })
     }
     // Over drums, a note a sixteenth away from a kick that has no note of its own is moved onto it.
@@ -307,4 +386,46 @@ export function bassNotes(line: BassLine, project: Project, track: Track, start:
   return placed
     .filter((note, i) => note.start < length && (i === 0 || note.start > placed[i - 1].start))
     .map((note, i, all) => ({ id: newId(), pitch: note.pitch, start: note.start, length: Math.max(30, Math.min(note.length, (all[i + 1]?.start ?? length) - note.start - 10)), velocity: note.velocity }))
+}
+
+/** Where each way of spreading a chord puts its notes: the lowest note of the octave they fall in. */
+const WINDOWS: Record<NonNullable<Part['voicing']>, number> = { mid: 55, seventh: 55, wide: 55, high: 62 }
+
+/**
+ * The notes of a chord part. Each of the chord's notes goes to wherever it
+ * falls within one octave, so from chord to chord the hand hardly moves.
+ * Every fourth bar pushes into the next with a hit just before it, and in
+ * the second four of eight the chords gain a note on top.
+ */
+function chordNotes(part: Part, harmony: Harmony[], steps: number, length: number, late: number, random: () => number): Note[] {
+  const voicing = part.voicing ?? 'mid'
+  const low = WINDOWS[voicing]
+  const bars = harmony.length
+  const marks = Array.from({ length: steps }, (_, step) => part.line[step % part.line.length])
+  // The push: where a fourth bar ends on a rest, a soft hit on its last half-beat.
+  if (bars >= 4) for (let bar = 3; bar < bars; bar += 4) if (bar * BAR + 15 < steps && marks[bar * BAR + 14] === '-' && marks[bar * BAR + 15] === '-') marks[bar * BAR + 14] = 'o'
+
+  const notes: Note[] = []
+  for (let step = 0; step < steps; step++) {
+    const mark = marks[step]
+    if (mark === '-' || mark === '=') continue
+    let held = 1
+    while (step + held < steps && marks[step + held] === '=') held++
+    const bar = Math.min(bars - 1, Math.floor(step / BAR))
+    // The push plays the chord that is coming.
+    const pushed = mark === 'o' && part.line[step % part.line.length] === '-'
+    const { root, third, fifth, seventh } = harmony[pushed ? (bar + 1) % bars : bar]
+    const within = (semitones: number): number => low + mod12(root + semitones - low)
+    const pitches = [within(0), within(third), within(fifth)]
+    if (voicing === 'seventh') pitches.push(within(seventh))
+    if (voicing === 'wide') pitches.push(within(0) - 12)
+    if (Math.floor(bar / 4) % 2 === 1) pitches.push(within(0) + 12)
+    const level = (mark === 'X' ? 0.92 : mark === 'o' ? 0.5 : 0.78) * (0.95 + random() * 0.1)
+    const start = step * SIXTEENTH + (step % 2 === 1 ? late : 0)
+    // A hit that is not held is short: a stab, not a chord left ringing.
+    const lasts = held > 1 ? held * SIXTEENTH - 20 : Math.round(SIXTEENTH * 0.8)
+    const top = Math.max(...pitches)
+    for (const pitch of new Set(pitches)) notes.push({ id: newId(), pitch, start, length: Math.min(lasts, length - start), velocity: Math.min(1, pitch === top ? level * 1.06 : level) })
+  }
+  return notes.filter((note) => note.start < length && note.length > 0)
 }

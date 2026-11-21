@@ -4,7 +4,7 @@ import { keySegments, segmentAt } from '@shared/keymap'
 import { inKey, isRoot, nearestInKey, noteName, type Key } from '@shared/theory'
 import { timeMap } from '@shared/timemap'
 import { TextField } from './controls/fields'
-import { BASS_GROUPS, BASS_LINES, bassNotes, roomFor, type BassLine } from '../bass'
+import { PARTS, headingOf, partNotes, partOrder, roomFor, type Part } from '../parts'
 import { isDrumTrack } from '../drums'
 import { engine } from '../engine'
 import { barChords } from '../harmony'
@@ -270,17 +270,17 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
   const selectAll = (): void => useStudio.setState({ selectedNoteIds: clip.notes.map((n) => n.id) })
 
   /**
-   * Starts the clip from a bass line, in the key and over the chords and the
-   * drums that are there now. A short clip is made eight bars long first, if
-   * that is wanted, so the line can run its course. One undo step.
+   * Starts the clip from a part (a bass line, chords, a figure for a synth),
+   * in the key and over the chords and the drums that are there now. A short clip is made eight bars long first, if
+   * that is wanted, so the part can run its course. One undo step.
    */
-  const startFrom = (line: BassLine): void => {
+  const startFrom = (line: Part): void => {
     const now = useStudio.getState().project
     const length = grow ? roomFor(now, track, clip) : clip.length
-    const notes = bassNotes(line, now, track, clip.start, length)
+    const notes = partNotes(line, now, track, clip, length)
     replaceClip({ ...clip, length, notes })
     useStudio.setState({ selectedNoteIds: [] })
-    // A bass line sits low: bring it into view.
+    // A bass line sits low and a lead high: bring what was written into view.
     const el = scroller.current
     const pitches = notes.map((n) => n.pitch)
     if (el && pitches.length) el.scrollTop = rowOf(Math.round((Math.min(...pitches) + Math.max(...pitches)) / 2)) * ROW_HEIGHT - el.clientHeight / 2
@@ -309,15 +309,15 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
         {!isDrumTrack(track) && (
           <div className="pr-picker">
             <Picker
-              label="Start from a bass line…"
-              title="Replace the clip's notes with a bass line in the song's key, following its chords and the kick of its drums"
-              placeholder="Search bass lines"
+              label="Start from a part…"
+              title="Replace the clip's notes with a bass line, chords or a synth figure, in the song's key and following its chords"
+              placeholder="Search bass lines, chords, melodies"
               sections
-              groups={[...new Set(BASS_LINES.map((each) => each.style))].sort().map((style) => ({
+              groups={[...new Set(PARTS.map((each) => each.style))].sort().map((style) => ({
                 label: style,
-                options: BASS_LINES.filter((each) => each.style === style)
-                  .sort((a, b) => (BASS_GROUPS[style]?.indexOf(a.group) ?? 0) - (BASS_GROUPS[style]?.indexOf(b.group) ?? 0))
-                  .map((each) => ({ value: each, label: each.name, detail: each.follow ? 'follows the kick' : `${each.bpm} bpm`, sub: each.group }))
+                options: PARTS.filter((each) => each.style === style)
+                  .sort(partOrder)
+                  .map((each) => ({ value: each, label: each.name, detail: each.follow ? 'follows the kick' : each.bpm === 'any' ? '' : `${each.bpm} bpm`, sub: headingOf(each) }))
               }))}
               onPick={startFrom}
               actions={[{ label: `${grow ? '✓ ' : ''}Make the clip eight bars long`, onSelect: () => setLayout({ patternGrow: !grow }) }]}
