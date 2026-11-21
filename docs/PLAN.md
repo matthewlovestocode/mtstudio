@@ -85,6 +85,16 @@ transport bar saying which engine is in use.
   the ruler; a menu on right-click for clips, lanes, the ruler and markers.
 - **Clip editors:** the piano roll (`PianoRoll.tsx`) and, for audio clips,
   a waveform with the clip's settings beside it (`AudioClipEditor.tsx`).
+- **Step sequencer (`StepSequencer.tsx`, `drums.ts`):** a MIDI clip seen as
+  a grid, a row to a drum and a column to a step, for building a beat by
+  switching hits on and off. Clips on drum tracks open in it; a switch in
+  the editor's bar goes to the piano roll and back. It reads and writes the
+  clip's notes and nothing else, so it works with any kit (rows follow
+  General MIDI's drum map, or the built-in drum machine's twelve sounds).
+  It has rhythms to start from, written as lines of sixteenths (`PATTERNS`);
+  Vary, Fill and Humanise; rolls of two to four in a step; accents and
+  ghost notes; and swing, which is read from the notes and written to
+  them, so nothing but the clip holds it. It works from the keyboard.
 
 Left over:
 - Tempo is typed, not dragged; there is no way to bypass snap while dragging

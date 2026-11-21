@@ -33,7 +33,7 @@ const clamp = (value: number, min: number, max: number): number => Math.min(max,
  * playhead, the toolbar's tools act on the selection (or on every note when
  * there is none), and a right-click offers the same and more.
  */
-export function PianoRoll({ track, clip }: { track: Track; clip: MidiClip }): React.JSX.Element {
+export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: MidiClip; /** The switch between this and the step sequencer, which the clip editor supplies. */ viewSwitch?: React.ReactNode }): React.JSX.Element {
   const snap = useStudio((s) => s.snap)
   const selectedNoteIds = useStudio((s) => s.selectedNoteIds)
   // The tools act on the selected notes, or on every note when none is selected.
@@ -236,6 +236,7 @@ export function PianoRoll({ track, clip }: { track: Track; clip: MidiClip }): Re
           <span className="pr-dot" style={{ background: track.color }} />
           {track.name}
         </span>
+        {viewSwitch}
         <span className="pr-sep" />
         <span className="pr-label">Grid</span>
         <Segmented label="Grid" value={String(snap)} options={GRIDS} onChange={(value) => useStudio.setState({ snap: Number(value) })} />

@@ -25,6 +25,8 @@ export interface Layout {
   favourites: string[]
   /** The audio input to record from, by name; null for the system's default. */
   inputDevice: string | null
+  /** The step sequencer's grid: how many steps to a beat. */
+  stepDivision: number
 }
 
 export const BROWSER = { min: 240, max: 480, default: 300 }
@@ -51,7 +53,7 @@ export const DOCK = { min: 140, default: 300 }
 export const ARRANGE_MIN = 120
 
 const KEY = 'studio.layout'
-const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null }
+const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null, stepDivision: 4 }
 
 function stored(): Layout {
   try {
@@ -98,3 +100,9 @@ export function setFloating(panel: PanelId, floating: boolean): void {
   // Coming back, a panel is shown, not left folded away.
   if (!floating) setLayout(panel === 'inspector' ? { sideOpen: true } : panel === 'browser' ? { browserOpen: true } : { dockOpen: true, dockTab: panel })
 }
+
+/** Which editor a track's MIDI clips open in, where the user has said; otherwise drum tracks get the step sequencer and the rest the piano roll. */
+export const useClipView = create<Record<string, 'steps' | 'roll'>>(() => ({}))
+
+/** The step sequencer's rows for a track, as notes, top to bottom; a kit's usual rows until the user changes them. */
+export const useDrumRows = create<Record<string, number[]>>(() => ({}))
