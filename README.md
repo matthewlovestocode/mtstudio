@@ -55,7 +55,7 @@ You also need about 2 GB of free disk space and an internet connection for the f
    npm run dev:native
    ```
 
-A window opens with a demo project. Press Space to play.
+The very first start downloads Electron itself (about 100 MB), so it takes a minute longer. Then a window opens with a demo project. Press Space to play.
 
 From then on, step 5 is all you need. Leave the terminal open while you use the app; closing it, or pressing Ctrl+C in it, quits mtstudio.
 
