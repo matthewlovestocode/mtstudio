@@ -126,7 +126,9 @@ transport bar saying which engine is in use.
   the editor's bar goes to the piano roll and back. It reads and writes the
   clip's notes and nothing else, so it works with any kit (rows follow
   General MIDI's drum map, or the built-in drum machine's twelve sounds).
-  It has rhythms to start from, written as lines of sixteenths (`PATTERNS`);
+  It has about two hundred rhythms to start from, in twenty styles,
+  written as lines of sixteenths (`PATTERNS`), with parts for cowbell,
+  shaker and congas that fall back to what a smaller kit has;
   Vary, Fill and Humanise; rolls of two to four in a step; accents and
   ghost notes; and swing, which is read from the notes and written to
   them, so nothing but the clip holds it. It works from the keyboard.

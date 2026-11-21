@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { PPQ, type MidiClip, type Note, type Track } from '@shared/model'
 import { timeMap } from '@shared/timemap'
-import { ACCENT, DIVISIONS, GHOST, NORMAL, PATTERNS, fill, hits, humanise, kitFor, patternNotes, vary } from '../drums'
+import { ACCENT, DIVISIONS, GHOST, NORMAL, PATTERNS, PATTERN_GROUPS, fill, hits, humanise, kitFor, patternNotes, vary } from '../drums'
 import { engine } from '../engine'
 import { togglePlay } from '../recording'
 import { findClip, replaceClip, setLoop, updateClip } from '../state/actions'
@@ -226,9 +226,13 @@ export function StepSequencer({ track, clip, viewSwitch }: { track: Track; clip:
             label="Start from a pattern…"
             title="Replace the clip's notes with a rhythm to work from"
             placeholder="Search patterns"
-            groups={[...new Set(PATTERNS.map((each) => each.style))].map((style) => ({
+            sections
+            groups={[...new Set(PATTERNS.map((each) => each.style))].sort().map((style) => ({
               label: style,
-              options: PATTERNS.filter((each) => each.style === style).map((each) => ({ value: each, label: each.name, detail: `${each.bpm} bpm` }))
+              options: PATTERNS.filter((each) => each.style === style)
+                // A style's groups in their set order; the sort is stable, so each keeps its patterns in theirs.
+                .sort((a, b) => (PATTERN_GROUPS[style]?.indexOf(a.group ?? '') ?? 0) - (PATTERN_GROUPS[style]?.indexOf(b.group ?? '') ?? 0))
+                .map((each) => ({ value: each, label: each.name, detail: `${each.bpm} bpm`, sub: each.group }))
             }))}
             onPick={(pattern) => write(patternNotes(pattern, kit, clip.length))}
           />
