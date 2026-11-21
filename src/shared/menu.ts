@@ -22,7 +22,6 @@ export type MenuCommand =
   | 'addInstrumentTrack'
   | 'addAudioTrack'
   | 'addBus'
-  | 'togglePreview'
 
 export interface MenuEntry {
   command: MenuCommand
@@ -45,9 +44,6 @@ export const TRACK_MENU: MenuSection = {
     { command: 'addBus', label: 'New Bus', accelerator: 'Alt+CmdOrCtrl+T' }
   ]
 }
-
-/** Switches between the current interface and the reworked one in `src/renderer/src/next`. Goes when the rework is done. */
-export const PREVIEW_TOGGLE: MenuEntry = { command: 'togglePreview', label: 'Switch Current / Preview Interface', accelerator: 'Shift+CmdOrCtrl+U' }
 
 const IMPORT_AUDIO: MenuEntry = { command: 'importAudio', label: 'Import Audio…', accelerator: 'CmdOrCtrl+I' }
 
@@ -74,8 +70,7 @@ export const MENUS: MenuSection[] = [
       { command: 'split', label: 'Split at Playhead', accelerator: 'CmdOrCtrl+E' }
     ]
   },
-  TRACK_MENU,
-  { label: 'Preview', items: [PREVIEW_TOGGLE] }
+  TRACK_MENU
 ]
 
 /** What the "+ Track" button in the transport bar offers. */

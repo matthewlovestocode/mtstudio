@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import { EFFECTS, effectParam, formatParam, type ParamDef } from '@shared/effects'
 import { DEFAULT_SAMPLER, type BuiltInEffectType, type Effect, type InstrumentType, type PluginRef, type SamplerParams, type SynthParams, type Track, type Waveform } from '@shared/model'
-import { TextField } from '../components/controls'
+import { TextField } from './controls/fields'
 import { nativeEngine } from '../engine'
 import { loadSampleDialog } from '../platform'
 import { pluginLabel, scanPlugins, usePlugins } from '../plugins'

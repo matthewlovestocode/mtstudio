@@ -61,7 +61,7 @@ export function PopOut(props: {
     win.addEventListener('keyup', forward)
 
     const root = win.document.createElement('div')
-    root.className = 'ui-next popout'
+    root.className = 'studio popout'
     win.document.body.appendChild(root)
     setContainer(root)
 

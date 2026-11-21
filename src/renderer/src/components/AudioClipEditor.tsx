@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { clipStretch, type AudioClip, type Track } from '@shared/model'
 import { timeMap } from '@shared/timemap'
-import { TextField } from '../components/controls'
+import { TextField } from './controls/fields'
 import { engine } from '../engine'
 import { duplicateClips, removeClips, setClipStretch, splitClips, updateClip } from '../state/actions'
 import { assetInfo, useStudio } from '../state/store'

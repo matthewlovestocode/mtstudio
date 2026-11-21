@@ -1,5 +1,5 @@
 import { AUTOMATION_RANGE, type Track } from '@shared/model'
-import { Meter, TextField } from '../components/controls'
+import { Meter, TextField } from './controls/fields'
 import { toggleArm } from '../recording'
 import { updateTrack } from '../state/actions'
 import { useStudio } from '../state/store'

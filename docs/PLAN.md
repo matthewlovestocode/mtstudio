@@ -67,6 +67,33 @@ transport bar saying which engine is in use.
   seconds and offered back on the next launch if the app did not close
   cleanly.
 
+### Interface (`src/renderer/src/components`, `styles/`)
+
+- **Layout (`Shell.tsx`):** the transport bar across the top; under it the
+  inspector down the left, the arrangement, and a dock beneath the
+  arrangement with the clip editor and the mixer as tabs. Panels resize and
+  fold away (`layout.ts` remembers how), and the inspector and each dock tab
+  can be brought out into a window of its own (`PopOut.tsx`): an empty
+  window the page fills in, so it shares the store and the engine. The main
+  process allows only those windows to be opened.
+- **Controls (`components/controls`):** knob, fader, buttons and toggles,
+  menus and context menus, and a searchable picker. Knobs and faders share
+  one behaviour (`value.ts`): drag, Shift for fine, double-click to reset,
+  arrow keys. Sizes and colours come from the tokens in `styles/tokens.css`.
+- **Arrangement (`Timeline.tsx`):** one snap setting that every drag obeys;
+  drag across empty lanes to select; a loop region to drag and resize in
+  the ruler; a menu on right-click for clips, lanes, the ruler and markers.
+- **Clip editors:** the piano roll (`PianoRoll.tsx`) and, for audio clips,
+  a waveform with the clip's settings beside it (`AudioClipEditor.tsx`).
+
+Left over:
+- Tempo is typed, not dragged; there is no way to bypass snap while dragging
+- Panel windows are not remembered between sessions, and their meters stop
+  while the main window is minimised
+- No settings window (devices, buffer size, which engine); no browser panel
+  for instruments, plugins and files
+- The mixer has no sends, effect slots or master fader
+
 ### Web Audio engine (`engine/WebAudioEngine.ts`)
 
 - **Lookahead scheduler:** a 25 ms timer schedules everything in the next
@@ -121,7 +148,7 @@ Left over from this milestone:
 - Latency compensation trusts what the browser reports; a loopback
   calibration and a manual offset setting would make it exact
 - No input device picker (the system default input is used)
-- Rubber-band selection; velocity for keyboard-played notes
+- Velocity for keyboard-played notes
 - Packaged builds need a microphone usage description (and signing) before
   macOS will grant input access
 
@@ -148,7 +175,7 @@ Left over from this milestone:
 - Smooth effect parameter changes (EQ and mix changes are applied at once)
 - Tempo ramps; dragging tempo and signature markers; tap tempo
 - Route a track's output to a bus (group buses), not just sends
-- Automation for effect and instrument parameters; reordering effects
+- Automation for effect and instrument parameters
 - Sampler: multi-sample zones and looping; sample-based drum kits
 
 ### 4 — Scale and polish (done)
@@ -182,7 +209,7 @@ Left over from this milestone:
 - Stretch quality: WSOLA softens sharp transients such as drum hits; a
   transient-preserving or phase-vocoder mode would fix that. Stretched
   copies are never evicted from memory
-- Rubber-band selection of notes and clips; quantise strength and swing
+- Quantise strength and swing
 
 ### 5 — Native engine (started)
 
@@ -425,8 +452,8 @@ Remaining:
     are not told if the device changes
   - Scanning examines plugins one after another; with hundreds installed
     the first scan will take minutes, and there is no progress display or
-    way to choose folders. The Add effect list is a plain menu, which will
-    not scale to a large collection
+    way to choose folders. The Add effect list can be
+    searched, but has no folders, favourites or recently used
   - Mono or surround plugins are only handled by fitting them to stereo.
     There is no routing of another track into a side chain, and a
     multi-output instrument is heard through its first output only

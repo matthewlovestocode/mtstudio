@@ -1,48 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClipEditor } from './ClipEditor'
 import { Inspector } from './Inspector'
-import { Kit } from './Kit'
 import { ARRANGE_MIN, DOCK, SIDE, setFloating, setLayout, showDock, useFloating, useLayout, type DockTab, type PanelId } from './layout'
 import { Mixer } from './Mixer'
 import { PopOut } from './PopOut'
 import { Splitter } from './Splitter'
-import { Switch } from './Switch'
 import { Timeline } from './Timeline'
 import { Transport } from './Transport'
-import './tokens.css'
-import './controls/controls.css'
-import './next.css'
 
 /**
- * The reworked interface, built here beside the one in use.
- *
- * To rework a piece, write its replacement in this folder and use it here in
- * place of the import from `../components`; style it in `next.css`, where
- * every rule sits under `.ui-next` so nothing reaches the current interface.
- * Once a piece is approved it moves over: the new file replaces the old one
- * in `../components`, its rules move to `styles.css`, and the import here
- * points back at `../components`. When nothing is left to move, this folder
- * and the switch go.
- *
- * So far: the layout. The inspector is a panel of its own down the left
- * side, the arrangement has the rest of the width, and a dock under it holds
- * the clip editor and a mixer. Both panels resize and fold away, and the
- * inspector and each of the dock's tabs can be brought out into a window of
- * its own and put back.
+ * The window's layout. The transport bar runs across the top. Under it the
+ * inspector is a panel down the left side, the arrangement has the rest of
+ * the width, and a dock beneath the arrangement holds the clip editor and
+ * the mixer. Both panels resize and fold away, and the inspector and each
+ * of the dock's tabs can be brought out into a window of its own and put
+ * back.
  */
 const PANELS: Record<PanelId, { title: string; width: number; height: number }> = {
   inspector: { title: 'Inspector', width: 300, height: 640 },
   editor: { title: 'Editor', width: 960, height: 440 },
-  mixer: { title: 'Mixer', width: 760, height: 420 },
-  // For the rework only: the tokens and controls, to look over.
-  kit: { title: 'Controls', width: 980, height: 560 }
+  mixer: { title: 'Mixer', width: 760, height: 420 }
 }
 const PANEL_IDS = Object.keys(PANELS) as PanelId[]
 
 function panelContent(panel: PanelId): React.JSX.Element {
   if (panel === 'mixer') return <Mixer />
   if (panel === 'editor') return <ClipEditor />
-  if (panel === 'kit') return <Kit />
   return (
     <div className="insp">
       <Inspector />
@@ -68,7 +51,7 @@ export function Shell(): React.JSX.Element {
   const dockHeight = Math.min(layout.dockHeight, dockMax)
 
   return (
-    <div className="app ui-next">
+    <div className="app studio">
       <Transport />
       <div className="next-body">
         {sideDocked ? (
@@ -125,9 +108,7 @@ export function Shell(): React.JSX.Element {
             <div className="dock-bar" role="tablist" aria-label="Dock">
               <DockTabButton tab="editor" label="Editor" />
               <DockTabButton tab="mixer" label="Mixer" />
-              <DockTabButton tab="kit" label="Controls" />
               <div className="spacer" />
-              <Switch inline />
               {layout.dockOpen && !floating[layout.dockTab] && <PopOutButton panel={layout.dockTab} />}
               <button
                 className="panel-fold"
@@ -141,7 +122,7 @@ export function Shell(): React.JSX.Element {
             {layout.dockOpen && (
               <div className="dock-body" role="tabpanel">
                 {floating[layout.dockTab] ? (
-                  <div className="placeholder">
+                  <div className="ce-empty">
                     <p>The {PANELS[layout.dockTab].title.toLowerCase()} is in its own window.</p>
                     <p>
                       <button onClick={() => setFloating(layout.dockTab, false)}>Bring it back</button>

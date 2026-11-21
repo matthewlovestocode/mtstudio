@@ -12,36 +12,58 @@ import {
   type Track
 } from '@shared/model'
 import { engine } from '../engine'
-import { importAudioFiles } from '../platform'
+import { importAudioFiles, runCommand } from '../platform'
 import { timeMap, type Bar, type TimeMap } from '@shared/timemap'
-import { toggleArm } from '../recording'
 import {
   addMarker,
   addMeterChange,
   addMidiClip,
+  duplicateClips,
   addTempoChange,
   findClip,
   placeClips,
+  removeClips,
   removeMarker,
   removeMeterChange,
   removeTempoChange,
-  removeTrack,
   replaceClip,
   selectClip,
   setAutomation,
   setLoop,
   setMeter,
   setTempo,
+  splitClips,
   trimmedStart,
   updateClip,
-  updateMarker,
-  updateTrack
+  updateMarker
 } from '../state/actions'
 import { assetInfo, MAX_ZOOM, MIN_ZOOM, useStudio } from '../state/store'
 import { snapTo, startDrag, useFrame } from '../util'
-import { Meter, NumberField, Slider, TextField } from './controls'
+import { NumberField, TextField } from './controls/fields'
+import { IconButton } from './controls/buttons'
+import { Caret, useMenu, type MenuItem } from './controls/Popover'
+import { HEADER_WIDTH, SNAP_BAR, SNAP_OFF, SNAP_OPTIONS, setLayout, useLayout } from './layout'
+import { TrackHeader } from './TrackHeader'
 
-const HEADER_WIDTH = 236
+/** Opens a menu at the pointer. Handed down to everything in the timeline that has one. */
+type OpenMenu = (event: React.MouseEvent, items: MenuItem[]) => void
+
+/**
+ * Rounds a position to the timeline's snap setting: a division of the beat,
+ * the nearest bar line, or (snap off) the nearest tick.
+ */
+function snapper(snap: number, map: TimeMap): (tick: number) => number {
+  if (snap === SNAP_OFF) return Math.round
+  if (snap !== SNAP_BAR) return (tick) => snapTo(tick, snap)
+  return (tick) => {
+    const bar = map.barAt(Math.max(0, tick))
+    return tick - bar.start < bar.length / 2 ? bar.start : bar.start + bar.length
+  }
+}
+
+/** The shortest a clip can be made by dragging its edge. */
+const minLength = (snap: number): number => (snap > 0 ? Math.min(snap, PPQ) : PPQ / 4)
+
 /** Must match --track-height in styles.css. */
 const TRACK_HEIGHT = 72
 /** Must match --ruler-height and --global-row-height in styles.css. */
@@ -49,6 +71,8 @@ const RULER_HEIGHT = 26
 const GLOBAL_ROW_HEIGHT = 22
 const CLIP_BODY_HEIGHT = 46
 const GLOBAL_ROWS = 3
+/** Must match the loop band's height in next.css. */
+const LOOP_BAND = 9
 /**
  * Only what is near the visible part of the timeline is rendered. The
  * rendered window extends this far past each edge and moves in steps, so
@@ -63,8 +87,22 @@ interface View {
   to: number
 }
 
+/**
+ * The arrangement: the ruler, the tempo, signature and marker rows (which
+ * fold away), and a row per track. Every drag obeys the snap setting in the
+ * corner. Dragging across empty lanes selects clips; the loop region in the
+ * ruler can be dragged and resized; and clips, lanes, the ruler and markers
+ * each have a menu on right-click, so nothing is reachable only by a gesture
+ * you have to know about.
+ */
 export function Timeline(): React.JSX.Element {
   const project = useStudio((s) => s.project)
+  const snap = useLayout((s) => s.snap)
+  const globals = useLayout((s) => s.globals)
+  const globalRows = globals ? GLOBAL_ROWS : 0
+  const [menu, openMenu] = useMenu()
+  const inner = useRef<HTMLDivElement>(null)
+  const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const pxPerBeat = useStudio((s) => s.pxPerBeat)
   const pxPerTick = pxPerBeat / PPQ
   const map = timeMap(project)
@@ -131,11 +169,49 @@ export function Timeline(): React.JSX.Element {
 
   const visibleBars = bars.filter((bar) => (bar.start + bar.length) * pxPerTick >= view.from && bar.start * pxPerTick <= view.to)
 
+  /** Dragging across empty lanes draws a box and selects the clips it touches. With Shift or Cmd/Ctrl they are added to the selection. */
+  const beginMarquee = (e: React.PointerEvent, track: Track): void => {
+    if (e.button !== 0 || !inner.current) return
+    const el = inner.current
+    const origin = el.getBoundingClientRect()
+    const x0 = e.clientX - origin.left
+    const y0 = e.clientY - origin.top
+    const base = e.shiftKey || e.metaKey || e.ctrlKey ? useStudio.getState().selectedClipIds : []
+    useStudio.setState({ selectedTrackId: track.id, selectedClipIds: base })
+    const lanesTop = RULER_HEIGHT + GLOBAL_ROW_HEIGHT * globalRows
+    startDrag(
+      e,
+      (dx, dy) => {
+        // Measured afresh: the timeline may have scrolled under the pointer since the drag began.
+        const now = el.getBoundingClientRect()
+        const x1 = e.clientX + dx - now.left
+        const y1 = e.clientY + dy - now.top
+        const left = Math.max(HEADER_WIDTH, Math.min(x0, x1))
+        const top = Math.max(lanesTop, Math.min(y0, y1))
+        const right = Math.max(x0, x1)
+        const bottom = Math.max(y0, y1)
+        setMarquee({ left, top, width: right - left, height: bottom - top })
+        const from = (left - HEADER_WIDTH) / pxPerTick
+        const to = (right - HEADER_WIDTH) / pxPerTick
+        const firstRow = Math.floor((top - lanesTop) / TRACK_HEIGHT)
+        const lastRow = Math.floor((bottom - lanesTop) / TRACK_HEIGHT)
+        const hit = useStudio
+          .getState()
+          .project.tracks.slice(Math.max(0, firstRow), lastRow + 1)
+          .flatMap((t) => t.clips.filter((c) => c.start < to && c.start + c.length > from).map((c) => c.id))
+        useStudio.setState({ selectedClipIds: [...new Set([...base, ...hit])] })
+      },
+      () => setMarquee(null)
+    )
+  }
+
+  const snapLabel = SNAP_OPTIONS.find(([value]) => value === snap)?.[1] ?? 'Off'
+
   return (
-    <div className="arrange" ref={arrange}>
-      <div className="arrange-inner" style={{ width: HEADER_WIDTH + width }}>
+    <div className="arrange tl" ref={arrange}>
+      <div className="arrange-inner" ref={inner} style={{ width: HEADER_WIDTH + width }}>
         {/* Bar and beat lines behind every lane. Bars differ in length when the time signature changes. */}
-        <div className="grid" style={{ left: HEADER_WIDTH, top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * GLOBAL_ROWS }}>
+        <div className="grid" style={{ left: HEADER_WIDTH, top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * globalRows }}>
           {visibleBars.map((bar) => (
             <div
               className="grid-bar"
@@ -151,29 +227,55 @@ export function Timeline(): React.JSX.Element {
           ))}
         </div>
         <div className="ruler-row">
-          <div className="corner" style={{ width: HEADER_WIDTH }}>
-            {project.tracks.length} tracks
+          <div className="corner tl-corner" style={{ width: HEADER_WIDTH }}>
+            <IconButton label={globals ? 'Hide the tempo, signature and marker rows' : 'Show the tempo, signature and marker rows'} size="sm" onClick={() => setLayout({ globals: !globals })}>
+              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden style={{ transform: globals ? undefined : 'rotate(-90deg)' }}>
+                <path d="M2 4.25 6 8l4-3.75" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </IconButton>
+            <span className="tl-count">
+              {project.tracks.length} {project.tracks.length === 1 ? 'track' : 'tracks'}
+            </span>
+            <button
+              type="button"
+              className={`tl-snap ${snap === SNAP_OFF ? '' : 'on'}`}
+              title="Snap: what clips, the playhead and the loop line up with when dragged"
+              aria-haspopup="menu"
+              onClick={(event) =>
+                openMenu(event, [{ heading: 'Snap to' }, ...SNAP_OPTIONS.map(([value, label]) => ({ label, checked: snap === value, onSelect: () => setLayout({ snap: value }) }))])
+              }
+            >
+              Snap <strong>{snapLabel}</strong>
+              <Caret />
+            </button>
           </div>
-          <Ruler project={project} pxPerTick={pxPerTick} bars={visibleBars} />
+          <Ruler project={project} map={map} pxPerTick={pxPerTick} bars={visibleBars} snap={snap} openMenu={openMenu} />
         </div>
-        <TempoRow map={map} pxPerTick={pxPerTick} />
-        <MeterRow map={map} pxPerTick={pxPerTick} />
-        <MarkerRow project={project} pxPerTick={pxPerTick} />
+        {globals && (
+          <>
+            <TempoRow map={map} pxPerTick={pxPerTick} snap={snap} openMenu={openMenu} />
+            <MeterRow map={map} pxPerTick={pxPerTick} openMenu={openMenu} />
+            <MarkerRow project={project} map={map} pxPerTick={pxPerTick} snap={snap} openMenu={openMenu} />
+          </>
+        )}
         {project.tracks.map((track) => (
           <div className="track-row" key={track.id}>
             <TrackHeader track={track} />
-            <Lane track={track} project={project} pxPerTick={pxPerTick} view={view} />
+            <Lane track={track} project={project} pxPerTick={pxPerTick} view={view} snap={snap} openMenu={openMenu} onMarquee={beginMarquee} />
           </div>
         ))}
         {project.tracks.length === 0 && <div className="empty">Add a track to get started.</div>}
+        {marquee && <div className="tl-marquee" style={marquee} />}
         <div className="playhead" ref={playhead} style={{ left: HEADER_WIDTH }} />
       </div>
+      {menu}
     </div>
   )
 }
 
 /** Named positions. Press M to drop one at the playhead. */
-function MarkerRow({ project, pxPerTick }: { project: Project; pxPerTick: number }): React.JSX.Element {
+function MarkerRow({ project, map, pxPerTick, snap, openMenu }: { project: Project; map: TimeMap; pxPerTick: number; snap: number; openMenu: OpenMenu }): React.JSX.Element {
+  const snapped = snapper(snap, map)
   return (
     <div className="global-row" style={{ top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT * 2 }}>
       <div className="corner" style={{ width: HEADER_WIDTH }}>
@@ -181,10 +283,14 @@ function MarkerRow({ project, pxPerTick }: { project: Project; pxPerTick: number
       </div>
       <div
         className="global-lane"
-        title="Double-click to add a marker (or press M at the playhead). Right-click a marker to remove it."
+        title="Double-click to add a marker (or press M at the playhead). Right-click for more."
         onDoubleClick={(e) => {
           if (e.target !== e.currentTarget) return
-          addMarker(snapTo((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick, PPQ))
+          addMarker(snapped((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick))
+        }}
+        onContextMenu={(e) => {
+          const tick = snapped((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick)
+          openMenu(e, [{ label: 'Add Marker Here', onSelect: () => addMarker(tick) }])
         }}
       >
         {(project.markers ?? []).map((marker) => (
@@ -192,10 +298,14 @@ function MarkerRow({ project, pxPerTick }: { project: Project; pxPerTick: number
             className="marker flag"
             key={marker.id}
             style={{ left: marker.tick * pxPerTick }}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              removeMarker(marker.id)
-            }}
+            onContextMenu={(e) =>
+              openMenu(e, [
+                { heading: marker.name },
+                { label: 'Move Playhead Here', onSelect: () => engine.seek(marker.tick) },
+                { separator: true },
+                { label: 'Delete Marker', danger: true, onSelect: () => removeMarker(marker.id) }
+              ])
+            }
           >
             <button className="marker-go" title="Move the playhead here" onClick={() => engine.seek(marker.tick)}>
               ▸
@@ -209,7 +319,8 @@ function MarkerRow({ project, pxPerTick }: { project: Project; pxPerTick: number
 }
 
 /** Tempo changes along the timeline. Each one holds until the next. */
-function TempoRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): React.JSX.Element {
+function TempoRow({ map, pxPerTick, snap, openMenu }: { map: TimeMap; pxPerTick: number; snap: number; openMenu: OpenMenu }): React.JSX.Element {
+  const snapped = snapper(snap, map)
   return (
     <div className="global-row" style={{ top: RULER_HEIGHT }}>
       <div className="corner" style={{ width: HEADER_WIDTH }}>
@@ -217,10 +328,14 @@ function TempoRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
       </div>
       <div
         className="global-lane"
-        title="Double-click to add a tempo change. Right-click a change to remove it."
+        title="Double-click to add a tempo change. Right-click for more."
         onDoubleClick={(e) => {
           if (e.target !== e.currentTarget) return
-          addTempoChange(snapTo((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick, PPQ))
+          addTempoChange(snapped((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick))
+        }}
+        onContextMenu={(e) => {
+          const tick = snapped((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick)
+          openMenu(e, [{ label: 'Add Tempo Change Here', disabled: tick <= 0, onSelect: () => addTempoChange(tick) }])
         }}
       >
         {map.tempos.map((tempo) => (
@@ -228,10 +343,15 @@ function TempoRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
             className="marker"
             key={tempo.id ?? 'start'}
             style={{ left: tempo.tick * pxPerTick }}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              if (tempo.id) removeTempoChange(tempo.id)
-            }}
+            onContextMenu={(e) =>
+              openMenu(e, [
+                { heading: `${tempo.bpm} bpm` },
+                { label: 'Move Playhead Here', onSelect: () => engine.seek(tempo.tick) },
+                { separator: true },
+                // The tempo the project starts at can be changed but not removed.
+                { label: 'Delete Tempo Change', danger: true, disabled: !tempo.id, onSelect: () => tempo.id && removeTempoChange(tempo.id) }
+              ])
+            }
           >
             <NumberField className="marker-field" label="Tempo in beats per minute" value={tempo.bpm} onCommit={(bpm) => setTempo(tempo.id, bpm)} />
           </div>
@@ -242,7 +362,7 @@ function TempoRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
 }
 
 /** Time-signature changes, which always fall on a bar line. */
-function MeterRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): React.JSX.Element {
+function MeterRow({ map, pxPerTick, openMenu }: { map: TimeMap; pxPerTick: number; openMenu: OpenMenu }): React.JSX.Element {
   return (
     <div className="global-row" style={{ top: RULER_HEIGHT + GLOBAL_ROW_HEIGHT }}>
       <div className="corner" style={{ width: HEADER_WIDTH }}>
@@ -250,10 +370,14 @@ function MeterRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
       </div>
       <div
         className="global-lane"
-        title="Double-click to add a time-signature change at that bar. Right-click a change to remove it."
+        title="Double-click to add a time-signature change at that bar. Right-click for more."
         onDoubleClick={(e) => {
           if (e.target !== e.currentTarget) return
           addMeterChange(map.barAt((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick).index)
+        }}
+        onContextMenu={(e) => {
+          const bar = map.barAt((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick).index
+          openMenu(e, [{ label: `Add Signature Change at Bar ${bar + 1}`, disabled: bar <= 0, onSelect: () => addMeterChange(bar) }])
         }}
       >
         {map.meters.map((meter) => (
@@ -261,10 +385,14 @@ function MeterRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
             className="marker"
             key={meter.id ?? 'start'}
             style={{ left: meter.tick * pxPerTick }}
-            onContextMenu={(e) => {
-              e.preventDefault()
-              if (meter.id) removeMeterChange(meter.id)
-            }}
+            onContextMenu={(e) =>
+              openMenu(e, [
+                { heading: `${meter.numerator}/${meter.denominator}` },
+                { label: 'Move Playhead Here', onSelect: () => engine.seek(meter.tick) },
+                { separator: true },
+                { label: 'Delete Signature Change', danger: true, disabled: !meter.id, onSelect: () => meter.id && removeMeterChange(meter.id) }
+              ])
+            }
           >
             <TextField
               className="marker-field"
@@ -284,133 +412,112 @@ function MeterRow({ map, pxPerTick }: { map: TimeMap; pxPerTick: number }): Reac
   )
 }
 
-function Ruler(props: { project: Project; pxPerTick: number; bars: Bar[] }): React.JSX.Element {
-  const { project, pxPerTick, bars } = props
+function Ruler(props: { project: Project; map: TimeMap; pxPerTick: number; bars: Bar[]; snap: number; openMenu: OpenMenu }): React.JSX.Element {
+  const { project, map, pxPerTick, bars, openMenu } = props
   const { loop } = project
+  const snapped = snapper(props.snap, map)
   // When zoomed out, number only every second, fourth … bar so labels do not collide.
   const labelEvery = 2 ** Math.max(0, Math.ceil(Math.log2(30 / ((bars[0]?.length ?? PPQ * 4) * pxPerTick))))
 
+  const head = useRef<HTMLDivElement>(null)
+  useFrame(() => {
+    if (head.current) head.current.style.transform = `translateX(${engine.getPosition() * pxPerTick}px)`
+  })
+
+  const tickAtX = (el: Element, x: number): number => Math.max(0, snapped((x - el.getBoundingClientRect().left) / pxPerTick))
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
-    const left = e.currentTarget.getBoundingClientRect().left
+    if (e.button !== 0) return
+    const el = e.currentTarget
     const startX = e.clientX
-    const tickAt = (x: number): number => Math.max(0, snapTo((x - left) / pxPerTick, PPQ))
-    if (e.shiftKey) {
-      const anchor = tickAt(startX)
+    // Dragging along the top band, or anywhere with Shift held, marks out the loop.
+    if (e.shiftKey || e.clientY - el.getBoundingClientRect().top < LOOP_BAND) {
+      const anchor = tickAtX(el, startX)
       startDrag(e, (dx) => {
-        const other = tickAt(startX + dx)
+        const other = tickAtX(el, startX + dx)
         if (other !== anchor) setLoop({ enabled: true, start: Math.min(anchor, other), end: Math.max(anchor, other) }, 'loop')
       })
     } else {
-      engine.seek(tickAt(startX))
-      startDrag(e, (dx) => engine.seek(tickAt(startX + dx)))
+      engine.seek(tickAtX(el, startX))
+      startDrag(e, (dx) => engine.seek(tickAtX(el, startX + dx)))
     }
   }
 
-  return (
-    <div className="ruler" onPointerDown={onPointerDown} title="Click to move the playhead. Shift-drag to set the loop.">
-      {loop.end > loop.start && (
-        <div
-          className={`loop-region ${loop.enabled ? 'on' : ''}`}
-          style={{ left: loop.start * pxPerTick, width: (loop.end - loop.start) * pxPerTick }}
-        />
-      )}
-      {bars.map((bar) => (
-        <span className="bar-label" key={bar.index} style={{ left: bar.start * pxPerTick }}>
-          {bar.index % labelEvery === 0 ? bar.index + 1 : ''}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function TrackHeader({ track }: { track: Track }): React.JSX.Element {
-  const selected = useStudio((s) => s.selectedTrackId === track.id)
-  const armed = useStudio((s) => s.armedTrackId === track.id)
-  const automation = useStudio((s) => s.automationLanes[track.id])
-  // Off → volume → pan → off.
-  const cycleAutomation = (): void => {
-    const next: AutomationTarget | undefined = automation === undefined ? 'volume' : automation === 'volume' ? 'pan' : undefined
-    useStudio.setState((s) => {
-      const lanes = { ...s.automationLanes }
-      if (next) lanes[track.id] = next
-      else delete lanes[track.id]
-      return { automationLanes: lanes }
+  /** Drags the loop region: its body moves it, an edge resizes it. */
+  const dragLoop = (e: React.PointerEvent, edge: 'start' | 'end' | 'both'): void => {
+    e.stopPropagation()
+    const { start, end } = loop
+    const least = minLength(props.snap)
+    startDrag(e, (dx) => {
+      const delta = dx / pxPerTick
+      if (edge === 'both') {
+        const moved = Math.max(0, snapped(start + delta))
+        setLoop({ start: moved, end: moved + (end - start) }, 'loop')
+      } else if (edge === 'start') setLoop({ start: Math.max(0, Math.min(end - least, snapped(start + delta))) }, 'loop')
+      else setLoop({ end: Math.max(start + least, snapped(end + delta)) }, 'loop')
     })
   }
+
+  const onContextMenu = (e: React.MouseEvent<HTMLDivElement>): void => {
+    const tick = tickAtX(e.currentTarget, e.clientX)
+    const bar = map.barAt((e.clientX - e.currentTarget.getBoundingClientRect().left) / pxPerTick)
+    openMenu(e, [
+      { label: 'Move Playhead Here', onSelect: () => engine.seek(tick) },
+      { label: 'Add Marker Here', onSelect: () => addMarker(tick) },
+      { label: 'Add Tempo Change Here', disabled: tick <= 0, onSelect: () => addTempoChange(tick) },
+      { label: `Add Signature Change at Bar ${bar.index + 1}`, disabled: bar.index <= 0, onSelect: () => addMeterChange(bar.index) },
+      { separator: true },
+      { label: `Loop Bar ${bar.index + 1}`, onSelect: () => setLoop({ enabled: true, start: bar.start, end: bar.start + bar.length }) },
+      { label: 'Loop', checked: loop.enabled, disabled: loop.end <= loop.start, onSelect: () => setLoop({ enabled: !loop.enabled }) },
+      { label: 'Clear Loop', disabled: loop.end <= loop.start, onSelect: () => setLoop({ enabled: false, start: 0, end: 0 }) }
+    ])
+  }
+
   return (
-    <div
-      className={`track-header ${selected ? 'selected' : ''}`}
-      style={{ width: HEADER_WIDTH }}
-      onPointerDown={() =>
-        // Picking a track also drops clips selected on other tracks, so the inspector shows this one.
-        useStudio.setState((state) => ({
-          selectedTrackId: track.id,
-          selectedClipIds: state.selectedClipIds.filter((id) => track.clips.some((c) => c.id === id))
-        }))
-      }
-    >
-      <div className="track-color" style={{ background: track.color }} />
-      <div className="track-main">
-        <div className="track-line">
-          <input
-            className="track-name"
-            aria-label="Track name"
-            value={track.name}
-            onChange={(e) => updateTrack(track.id, { name: e.target.value }, `name-${track.id}`)}
-            onBlur={() => useStudio.getState().endGesture()}
-          />
-          <button
-            className={`mini auto ${automation ? 'on' : ''}`}
-            title={`Automation: ${automation ? AUTOMATION_RANGE[automation].label.toLowerCase() : 'off'} (click to change)`}
-            onClick={cycleAutomation}
-          >
-            {automation === 'pan' ? 'Pa' : automation === 'volume' ? 'Vo' : 'A'}
-          </button>
-          {track.kind !== 'bus' && (
-            <button className={`mini arm ${armed ? 'on' : ''}`} title="Arm for recording" onClick={() => void toggleArm(track.id)}>
-              R
-            </button>
-          )}
-          <button className={`mini mute ${track.mute ? 'on' : ''}`} title="Mute" onClick={() => updateTrack(track.id, { mute: !track.mute })}>
-            M
-          </button>
-          <button className={`mini solo ${track.solo ? 'on' : ''}`} title="Solo" onClick={() => updateTrack(track.id, { solo: !track.solo })}>
-            S
-          </button>
-          <button className="mini" title="Delete track" onClick={() => removeTrack(track.id)}>
-            ×
-          </button>
+    <div className="ruler" onPointerDown={onPointerDown} onContextMenu={onContextMenu} title="Click to move the playhead. Drag along the top edge (or Shift-drag) to mark a loop. Right-click for more.">
+      <div className="tl-loop-band" />
+      {bars.map((bar) => (
+        <div
+          className="tl-ruler-bar"
+          key={bar.index}
+          style={{
+            left: bar.start * pxPerTick,
+            width: bar.length * pxPerTick,
+            backgroundSize: `${bar.beatTicks * pxPerTick}px 100%`,
+            // Zoomed far out, beat ticks would merge into a solid line.
+            backgroundImage: bar.beatTicks * pxPerTick < 5 ? 'none' : undefined
+          }}
+        >
+          {bar.index % labelEvery === 0 ? bar.index + 1 : ''}
         </div>
-        <div className="track-line">
-          <Slider
-            className="volume"
-            label="Volume"
-            min={0}
-            max={1.5}
-            step={0.01}
-            reset={0.8}
-            value={track.volume}
-            onChange={(volume) => updateTrack(track.id, { volume }, `volume-${track.id}`)}
-          />
-          <Slider
-            className="pan"
-            label="Pan"
-            min={-1}
-            max={1}
-            step={0.05}
-            reset={0}
-            value={track.pan}
-            onChange={(pan) => updateTrack(track.id, { pan }, `pan-${track.id}`)}
-          />
+      ))}
+      {loop.end > loop.start && (
+        <div
+          className={`tl-loop ${loop.enabled ? 'on' : ''}`}
+          style={{ left: loop.start * pxPerTick, width: (loop.end - loop.start) * pxPerTick }}
+          title="The loop: drag to move it, drag an end to resize it"
+          onPointerDown={(e) => dragLoop(e, 'both')}
+        >
+          <div className="tl-loop-edge start" onPointerDown={(e) => dragLoop(e, 'start')} />
+          <div className="tl-loop-edge end" onPointerDown={(e) => dragLoop(e, 'end')} />
         </div>
-        <Meter target={track.id} />
-      </div>
+      )}
+      <div className="tl-ruler-head" ref={head} />
     </div>
   )
 }
 
-function Lane(props: { track: Track; project: Project; pxPerTick: number; view: View }): React.JSX.Element {
-  const { track, project, pxPerTick, view } = props
+function Lane(props: {
+  track: Track
+  project: Project
+  pxPerTick: number
+  view: View
+  snap: number
+  openMenu: OpenMenu
+  onMarquee: (event: React.PointerEvent, track: Track) => void
+}): React.JSX.Element {
+  const { track, project, pxPerTick, view, openMenu } = props
+  const trackSelected = useStudio((s) => s.selectedTrackId === track.id)
   // Clips well outside the visible stretch are not rendered at all.
   const visibleClips = track.clips.filter((c) => (c.start + c.length) * pxPerTick >= view.from && c.start * pxPerTick <= view.to)
   const selectedClipIds = useStudio((s) => s.selectedClipIds)
@@ -423,9 +530,21 @@ function Lane(props: { track: Track; project: Project; pxPerTick: number; view: 
 
   return (
     <div
-      className="lane"
+      className={`lane ${trackSelected ? 'selected' : ''}`}
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) useStudio.setState({ selectedTrackId: track.id, selectedClipIds: [] })
+        if (e.target === e.currentTarget) props.onMarquee(e, track)
+      }}
+      onContextMenu={(e) => {
+        if (e.target !== e.currentTarget) return
+        const at = tickAt(e)
+        const bar = map.barAt(at)
+        const tick = Math.max(0, snapper(props.snap, map)(at))
+        openMenu(e, [
+          ...(track.kind === 'midi' ? [{ label: `New Clip at Bar ${bar.index + 1}`, onSelect: () => addMidiClip(track.id, bar.start, bar.length) }] : []),
+          ...(track.kind === 'audio' ? [{ label: 'Import Audio…', onSelect: () => runCommand('importAudio') }] : []),
+          { label: 'Move Playhead Here', onSelect: () => engine.seek(tick) },
+          { label: 'Add Marker Here', onSelect: () => addMarker(tick) }
+        ])
       }}
       onDoubleClick={(e) => {
         if (e.target !== e.currentTarget || track.kind !== 'midi') return
@@ -439,7 +558,7 @@ function Lane(props: { track: Track; project: Project; pxPerTick: number; view: 
       onDrop={(e) => {
         e.preventDefault()
         const files = Array.from(e.dataTransfer.files)
-        if (files.length) void importAudioFiles(files, track.id, Math.max(0, snapTo(tickAt(e), PPQ)))
+        if (files.length) void importAudioFiles(files, track.id, Math.max(0, snapper(props.snap, map)(tickAt(e))))
       }}
     >
       {track.clips.length === 0 && (
@@ -448,7 +567,7 @@ function Lane(props: { track: Track; project: Project; pxPerTick: number; view: 
         </span>
       )}
       {visibleClips.map((clip) => (
-        <ClipView key={clip.id} clip={clip} track={track} project={project} pxPerTick={pxPerTick} view={view} selected={selectedClipIds.includes(clip.id)} />
+        <ClipView key={clip.id} clip={clip} track={track} project={project} pxPerTick={pxPerTick} view={view} selected={selectedClipIds.includes(clip.id)} snap={props.snap} openMenu={openMenu} />
       ))}
       {recordingHere && <RecordingRegion pxPerTick={pxPerTick} />}
       {automation && <AutomationLane track={track} target={automation} pxPerTick={pxPerTick} />}
@@ -463,8 +582,11 @@ function ClipView(props: {
   pxPerTick: number
   view: View
   selected: boolean
+  snap: number
+  openMenu: OpenMenu
 }): React.JSX.Element {
-  const { clip, track, project, pxPerTick, view, selected } = props
+  const { clip, track, project, pxPerTick, view, selected, openMenu } = props
+  const snapped = snapper(props.snap, timeMap(project))
   const select = (): void => {
     if (!useStudio.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id, track.id)
   }
@@ -485,7 +607,7 @@ function ClipView(props: {
     startDrag(
       e,
       (dx, dy) => {
-        const delta = Math.max(-earliest, snapTo(clip.start + dx / pxPerTick, PPQ) - clip.start)
+        const delta = Math.max(-earliest, snapped(clip.start + dx / pxPerTick) - clip.start)
         const starts = new Map([...origins].map(([id, start]) => [id, start + delta]))
         // A single clip can also be dragged to another track of the same kind.
         const target = origins.size === 1 ? before.tracks[row + Math.round(dy / TRACK_HEIGHT)] : undefined
@@ -500,7 +622,7 @@ function ClipView(props: {
     e.stopPropagation()
     select()
     startDrag(e, (dx) => {
-      const next = trimmedStart(clip, snapTo(clip.start + dx / pxPerTick, PPQ / 4), timeMap(project))
+      const next = trimmedStart(clip, snapped(clip.start + dx / pxPerTick), timeMap(project))
       const current = findClip(useStudio.getState().project, clip.id)?.clip
       if (next && current && next.start !== current.start) replaceClip(next, `trim-${clip.id}`)
     })
@@ -516,7 +638,8 @@ function ClipView(props: {
       if (asset) max = Math.round(timeMap(project).ticksAfter(clip.start, (asset.duration - clip.offset) * clipStretch(clip).stretch))
     }
     startDrag(e, (dx) => {
-      const length = Math.min(max, Math.max(PPQ / 4, snapTo(clip.length + dx / pxPerTick, PPQ / 4)))
+      // The end of the clip is what snaps, not its length.
+      const length = Math.min(max, Math.max(minLength(props.snap), snapped(clip.start + clip.length + dx / pxPerTick) - clip.start))
       updateClip(clip.id, { length }, `resize-${clip.id}`)
     })
   }
@@ -526,8 +649,20 @@ function ClipView(props: {
     <div
       className={`clip ${selected ? 'selected' : ''}`}
       style={{ left: clip.start * pxPerTick, width, '--clip-color': track.color } as React.CSSProperties}
-      onPointerDown={move}
+      onPointerDown={(e) => (e.button === 0 ? move(e) : e.stopPropagation())}
       onDoubleClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => {
+        // A right-click on a clip outside the selection is about that clip alone.
+        select()
+        const ids = useStudio.getState().selectedClipIds
+        openMenu(e, [
+          { heading: ids.length > 1 ? `${ids.length} clips` : clip.name },
+          { label: 'Split at Playhead', shortcut: '⌘E', onSelect: () => splitClips(ids, engine.getPosition()) },
+          { label: 'Duplicate', shortcut: '⌘D', onSelect: () => duplicateClips(ids) },
+          { separator: true },
+          { label: ids.length > 1 ? 'Delete Clips' : 'Delete Clip', shortcut: '⌫', danger: true, onSelect: () => removeClips(ids) }
+        ])
+      }}
     >
       <div className="clip-title">{clip.name}</div>
       <ClipCanvas

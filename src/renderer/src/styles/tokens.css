@@ -1,11 +1,11 @@
 /*
- * Design tokens for the reworked interface: every size, colour and type
- * setting a control may use. Set on `.ui-next`, which wraps the preview, each
- * panel window and each pop-up layer, so the current interface never sees
- * them. Controls take their values from here and nowhere else.
+ * Design tokens: every size, colour and type setting the interface may use.
+ * Set on `.studio`, which wraps the app, each panel brought out into its own
+ * window, and each pop-up layer. Controls take their values from here and
+ * nowhere else.
  */
 
-.ui-next {
+.studio {
   /* Space: a 4px rhythm with a 2px half-step for tight groups. */
   --space-1: 2px;
   --space-2: 4px;

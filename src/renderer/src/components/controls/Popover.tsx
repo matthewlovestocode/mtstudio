@@ -61,8 +61,8 @@ export function Popover(props: { origin: Origin; onClose: () => void; className?
   }, [doc, origin])
 
   return createPortal(
-    // The layer carries `ui-next` so the tokens reach a pop-up drawn outside the preview's own element.
-    <div className="ui-next pop-layer">
+    // The layer carries `studio` so the tokens reach a pop-up, which is drawn outside the app's own element.
+    <div className="studio pop-layer">
       <div
         ref={box}
         className={`pop ${props.className ?? ''}`}
@@ -185,8 +185,8 @@ export function MenuButton(props: { label: string; title?: string; items: MenuIt
 
 /**
  * The down chevron on a button that opens a list: thin and shallow, like the
- * one the system draws. Native pop-up buttons in the reworked interface are
- * given this same shape in `controls.css`, so the two cannot drift apart.
+ * one the system draws. Native pop-up buttons are given this same shape in
+ * `controls.css`, so the two cannot drift apart.
  */
 export function Caret(): React.JSX.Element {
   return (

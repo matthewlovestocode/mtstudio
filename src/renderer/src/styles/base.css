@@ -1,0 +1,382 @@
+/*
+ * The page itself, the plain form controls, and the arrangement's geometry:
+ * its rows, lanes, clips and playhead. `app.css` dresses these and lays out
+ * everything else.
+ */
+
+:root {
+  --bg: #15171c;
+  --panel: #1c1f26;
+  --panel-2: #232730;
+  --line: #2e333e;
+  --line-soft: #262a33;
+  --text: #dfe3ea;
+  --muted: #8791a1;
+  --accent: #5b9cf5;
+  --play: #6fcf8a;
+  --warn: #e8b84a;
+  --danger: #f07178;
+  --track-height: 72px;
+  --ruler-height: 26px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* Without this the one column grows to the arrangement's full scrolling width. */
+  grid-template-columns: minmax(0, 1fr);
+  height: 100%;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: #2b303b;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+select,
+input:not([type='range']) {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+input[type='range'] {
+  accent-color: var(--accent);
+  height: 14px;
+  margin: 0;
+  min-width: 0;
+}
+
+/* A narrow window: tighten up, so that everything still fits on one row where it can. */
+
+.spacer {
+  flex: 1;
+}
+
+.meter {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--play) 0%, var(--play) 70%, var(--warn) 88%, var(--danger) 100%);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+/* ── Arrangement ──────────────────────────────────────────────────────── */
+
+.arrange {
+  overflow: auto;
+  position: relative;
+  background: var(--bg);
+}
+
+.arrange-inner {
+  position: relative;
+  min-height: 100%;
+}
+
+.ruler-row,
+.track-row {
+  display: flex;
+}
+
+.ruler-row {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: var(--ruler-height);
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.ruler {
+  position: relative;
+  flex: 1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.track-row {
+  height: var(--track-height);
+}
+
+.lane {
+  position: relative;
+  flex: 1;
+  border-bottom: 1px solid var(--line);
+  background-image: linear-gradient(to right, var(--line) 1px, transparent 1px),
+    linear-gradient(to right, var(--line-soft) 1px, transparent 1px);
+}
+
+.lane-hint {
+  position: sticky;
+  left: 252px;
+  display: inline-block;
+  margin-top: 27px;
+  color: var(--muted);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.empty {
+  padding: 28px;
+  color: var(--muted);
+}
+
+.clip {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--clip-color) 22%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--clip-color) 60%, transparent);
+  cursor: grab;
+}
+
+.clip.selected {
+  border-color: #fff;
+  background: color-mix(in srgb, var(--clip-color) 34%, var(--panel));
+}
+
+.clip-title {
+  height: 17px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #0d1016;
+  background: var(--clip-color);
+}
+
+.clip-canvas {
+  display: block;
+  pointer-events: none;
+}
+
+.clip-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #fff;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.playhead {
+  z-index: 3;
+}
+
+/* ── Recording and clip editing ───────────────────────────────────────── */
+
+.recording-region {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--danger) 35%, transparent);
+  border: 1px solid var(--danger);
+  pointer-events: none;
+}
+
+.clip-trim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: ew-resize;
+}
+
+/* A plugin's controls are in its own window; the inspector only has the way to it. */
+
+.automation {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgb(21 23 28 / 55%);
+  cursor: crosshair;
+}
+
+.automation path {
+  fill: none;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.automation path.idle {
+  stroke-dasharray: 5 4;
+  opacity: 0.7;
+}
+
+.automation circle {
+  stroke: #fff;
+  stroke-width: 1.5;
+  cursor: grab;
+}
+
+/* ── Tempo map ────────────────────────────────────────────────────────── */
+
+:root {
+  --global-row-height: 22px;
+}
+
+.lane {
+  background-image: none;
+}
+
+.grid {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.grid-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--line);
+  background-image: linear-gradient(to right, var(--line-soft) 1px, transparent 1px);
+}
+
+.global-row {
+  display: flex;
+  position: sticky;
+  z-index: 5;
+  height: var(--global-row-height);
+}
+
+.global-row .corner {
+  font-size: 11px;
+}
+
+.global-lane {
+  position: relative;
+  flex: 1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 2px 0 2px 3px;
+  border-left: 1px solid var(--accent);
+}
+
+input.marker-field {
+  width: 46px;
+  height: 100%;
+  padding: 0 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Markers ──────────────────────────────────────────────────────────── */
+
+.marker.flag {
+  display: flex;
+  gap: 2px;
+  border-left-color: var(--warn);
+}
+
+button.marker-go {
+  padding: 0 3px;
+  border: none;
+  background: transparent;
+  color: var(--warn);
+  font-size: 10px;
+}
+
+input.marker-name {
+  width: 84px;
+}

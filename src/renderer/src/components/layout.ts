@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { PPQ } from '@shared/model'
 
 /** The panels around the arrangement: which are open, how big, and what the dock shows. Remembered between sessions. */
-export type DockTab = 'editor' | 'mixer' | 'kit'
+export type DockTab = 'editor' | 'mixer'
 
 export interface Layout {
   sideOpen: boolean
@@ -39,7 +39,7 @@ export const DOCK = { min: 140, default: 300 }
 /** The least of the arrangement that the dock must leave showing. */
 export const ARRANGE_MIN = 120
 
-const KEY = 'studio.next.layout'
+const KEY = 'studio.layout'
 const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default }
 
 function stored(): Layout {
@@ -71,7 +71,7 @@ export function showDock(tab: DockTab): void {
 export type PanelId = 'inspector' | DockTab
 
 /** Which panels are out in their own windows. Not remembered: the windows do not outlive the page. */
-export const useFloating = create<Record<PanelId, boolean>>(() => ({ inspector: false, editor: false, mixer: false, kit: false }))
+export const useFloating = create<Record<PanelId, boolean>>(() => ({ inspector: false, editor: false, mixer: false }))
 
 export function setFloating(panel: PanelId, floating: boolean): void {
   useFloating.setState({ [panel]: floating })

@@ -9,7 +9,11 @@ import { bridge, initAutosave, runCommand } from './platform'
 import { disarmIfGone } from './recording'
 import { setPluginState } from './state/actions'
 import { useStudio } from './state/store'
-import './styles.css'
+// In this order: later files build on, and in places override, earlier ones.
+import './styles/base.css'
+import './styles/tokens.css'
+import './styles/controls.css'
+import './styles/app.css'
 
 // Keep the engine in step with the store.
 engine.setProject(useStudio.getState().project)

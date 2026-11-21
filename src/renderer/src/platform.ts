@@ -9,7 +9,6 @@ import { decodePcm, type StreamInfo } from '@shared/pcm'
 import { timeMap } from '@shared/timemap'
 import { engine } from './engine'
 import type { AssetInfo, AudioStream } from './engine/types'
-import { toggleUi } from './next/preview'
 import { addTrack, makeTrack, splitClips } from './state/actions'
 import { emptyProject } from './state/demo'
 import { assetInfo, useStudio } from './state/store'
@@ -377,7 +376,5 @@ export function runCommand(command: MenuCommand): void {
       return addTrack('audio')
     case 'addBus':
       return addTrack('bus')
-    case 'togglePreview':
-      return toggleUi()
   }
 }

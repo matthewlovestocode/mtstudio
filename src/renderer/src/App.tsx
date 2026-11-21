@@ -1,12 +1,7 @@
 import { useEffect } from 'react'
 import { MENUS, matchesAccelerator } from '@shared/menu'
-import { Editor } from './components/Editor'
-import { Timeline } from './components/Timeline'
-import { Transport } from './components/Transport'
+import { Shell } from './components/Shell'
 import { engine } from './engine'
-import { usePreview } from './next/preview'
-import { Shell as NextShell } from './next/Shell'
-import { Switch } from './next/Switch'
 import { bridge, runCommand } from './platform'
 import { togglePlay, toggleRecord } from './recording'
 import { addMarker, duplicateClips, findClip, removeClips, removeNotes, transposeNotes } from './state/actions'
@@ -14,7 +9,6 @@ import { useStudio } from './state/store'
 import { isTyping } from './util'
 
 export function App(): React.JSX.Element {
-  const ui = usePreview((s) => s.ui)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       const mod = e.metaKey || e.ctrlKey
@@ -70,18 +64,5 @@ export function App(): React.JSX.Element {
     }
   }, [])
 
-  return (
-    <>
-      {ui === 'next' ? (
-        <NextShell />
-      ) : (
-        <div className="app">
-          <Transport />
-          <Timeline />
-          <Editor />
-        </div>
-      )}
-      {ui === 'current' && <Switch />}
-    </>
-  )
+  return <Shell />
 }
