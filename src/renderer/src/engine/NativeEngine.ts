@@ -1,5 +1,5 @@
 import { projectEnd, type Id, type Project } from '@shared/model'
-import type { NativeCommand, NativeEngineBridge, NativeEvent, NativeLatency, NativePlugins } from '@shared/nativeEngine'
+import type { NativeCommand, NativeEngineBridge, NativeEvent, NativeInput, NativeLatency, NativePlugins } from '@shared/nativeEngine'
 import { timeMap } from '@shared/timemap'
 import type { AssetInfo, AudioEngine, AudioStream, RecordedTake } from './types'
 import { encodeWav } from './wav'
@@ -334,6 +334,16 @@ export class NativeEngine implements AudioEngine {
       throw fail(unwrap(error, 'The audio input could not be opened.'))
     }
     this.inputOpen = trackId !== null
+  }
+
+  /** The audio inputs there are to record from. */
+  inputs(): Promise<NativeInput[]> {
+    return this.link.inputs().catch(() => [])
+  }
+
+  /** Chooses the input to record from (null for the system's default). It is opened when a track is next armed. */
+  chooseInput(name: string | null): Promise<void> {
+    return this.link.chooseInput(name)
   }
 
   /** Starts the transport with the loop ignored; with `captureAudio` the open input is recorded from that same frame. */

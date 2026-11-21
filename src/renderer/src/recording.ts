@@ -3,7 +3,8 @@
  * engine; MIDI takes are collected here from live note input.
  */
 import { newId, type AudioAsset, type AudioClip, type Id, type Note } from '@shared/model'
-import { engine } from './engine'
+import { setLayout } from './components/layout'
+import { engine, nativeEngine } from './engine'
 import { bridge } from './platform'
 import { timeMap } from '@shared/timemap'
 import { addClip } from './state/actions'
@@ -38,11 +39,30 @@ export async function toggleArm(trackId: Id): Promise<void> {
   try {
     // Audio tracks need the input open; MIDI tracks do not.
     await engine.setInput(track.kind === 'audio' ? trackId : null, monitor)
-  } catch {
-    window.alert('mtstudio could not open an audio input. Check that a microphone is connected and that access is allowed.')
+  } catch (error) {
+    // The engine says what went wrong (no access, a microphone it cannot use); failing that, the general advice.
+    const reason = error instanceof Error && error.message ? error.message : 'Check that a microphone is connected and that access is allowed.'
+    window.alert(`The track could not be armed for recording.\n\n${reason}`)
     return
   }
   useStudio.setState({ armedTrackId: trackId, selectedTrackId: trackId })
+}
+
+/**
+ * Records from another microphone (null for the system's default). If a
+ * track is armed, it is armed again so the change takes effect at once.
+ */
+export async function chooseInput(name: string | null): Promise<void> {
+  setLayout({ inputDevice: name })
+  await nativeEngine?.chooseInput(name)
+  const track = armedTrack()
+  if (track?.kind !== 'audio' || useStudio.getState().recordingFrom !== null) return
+  try {
+    await engine.setInput(track.id, useStudio.getState().monitor)
+  } catch (error) {
+    useStudio.setState({ armedTrackId: null })
+    window.alert(`That microphone could not be opened, so the track is no longer armed.\n\n${error instanceof Error ? error.message : ''}`)
+  }
 }
 
 export async function toggleMonitor(): Promise<void> {

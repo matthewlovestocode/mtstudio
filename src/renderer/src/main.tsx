@@ -5,6 +5,7 @@ import { engine, nativeEngine } from './engine'
 import { initMidiInput } from './midiInput'
 import * as platform from './platform'
 import { APP_NAME } from '@shared/menu'
+import { useLayout } from './components/layout'
 import { bridge, initAutosave, runCommand } from './platform'
 import { disarmIfGone } from './recording'
 import { setPluginState } from './state/actions'
@@ -32,6 +33,8 @@ useStudio.subscribe((state, previous) => {
   }
 })
 nativeEngine?.onPluginState(setPluginState)
+// The microphone chosen last time is the one to record from.
+void nativeEngine?.chooseInput(useLayout.getState().inputDevice)
 engine.onTransport((playing) => useStudio.setState(playing ? { playing } : { playing, recordingFrom: null }))
 initMidiInput()
 void initAutosave()

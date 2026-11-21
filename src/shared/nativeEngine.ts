@@ -61,11 +61,15 @@ export type NativeCommand =
    */
   | { type: 'render'; request: number; path: string }
   /**
-   * Open the default audio input for a track (heard through it with
-   * `monitor`), or close it when `trackId` is null. Answered by an `input`
-   * event. Sent by the main process, which checks microphone access first.
+   * Open an audio input for a track (heard through it with `monitor`), or
+   * close it when `trackId` is null. `device` names the input; without it,
+   * or if there is none of that name, the system's default is used. Answered
+   * by an `input` event. Sent by the main process, which checks microphone
+   * access first.
    */
-  | { type: 'setInput'; request: number; trackId: Id | null; monitor: boolean }
+  | { type: 'setInput'; request: number; trackId: Id | null; monitor: boolean; device?: string }
+  /** Ask what audio inputs there are. Answered by an `inputs` event. Sent by the main process. */
+  | { type: 'listInputs'; request: number }
   /**
    * Measure the round trip from output to input: play a short pattern of
    * noise bursts and listen for it on the open input. Answered by a
@@ -117,6 +121,8 @@ export type NativeEvent =
   | { type: 'rendered'; request: number; error?: string }
   /** The answer to `setInput`. Handled by the main process. */
   | { type: 'input'; request: number; error?: string; device?: string; channels?: number; latency?: number }
+  /** The answer to `listInputs`. Handled by the main process. */
+  | { type: 'inputs'; request: number; devices: NativeInput[] }
   /** The answer to `calibrate`: `seconds` unless `error` is set. `clarity` says how far the match stood out. Handled by the main process. */
   | { type: 'calibrated'; request: number; seconds?: number; reported?: number; clarity?: number; error?: string }
   /** The answer to `stopRecording`; `frames` is 0 when nothing was captured. Handled by the main process. */
@@ -163,6 +169,15 @@ export interface NativeTake {
  * seconds, for the audio devices in use. Takes are shifted by `measured` if
  * there is one, otherwise by what the device reports.
  */
+/** An audio input: a microphone, an interface, or a program that poses as one. */
+export interface NativeInput {
+  name: string
+  /** The one the system would use if none were chosen. */
+  isDefault: boolean
+  /** It only runs at telephone quality (a Bluetooth headset's microphone), and so cannot be recorded from. */
+  callQuality: boolean
+}
+
 export interface NativeLatency {
   /** From a calibration with these devices, kept between sessions; null if never measured. */
   measured: number | null
@@ -194,6 +209,10 @@ export interface NativeEngineBridge {
   render(): Promise<ArrayBuffer>
   /** Opens the audio input for a track, or closes it (null). Rejects if there is no input or access is refused. */
   setInput(trackId: Id | null, monitor: boolean): Promise<void>
+  /** The audio inputs there are to record from. */
+  inputs(): Promise<NativeInput[]>
+  /** Chooses the input to record from, by name; null goes back to the system's default. Takes effect when a track is next armed. */
+  chooseInput(name: string | null): Promise<void>
   latency(): Promise<NativeLatency>
   /**
    * Measures the recording latency by playing a test sound and listening for

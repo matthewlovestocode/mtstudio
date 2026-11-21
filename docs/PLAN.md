@@ -192,6 +192,23 @@ Left over:
 - The piano roll shows note names, not drum names, for a SoundFont drum kit
 - Shipping Surge XT with the app
 
+### Recording input (native engine)
+
+The microphone to record from is chosen in the transport bar (the app
+remembers the choice; the engine lists what there is with `listInputs` and
+`setInput` names one). A Bluetooth headset's microphone is listed but not
+offered: it runs only at telephone rates (16 kHz), the engine runs at the
+output's rate, and while such a microphone is open the headset's own
+playback drops to that quality as well. Arming a track with one says so in
+plain words; the headset remains fine for listening while another
+microphone records.
+
+Left over:
+- Recording from a Bluetooth headset's own microphone. It would mean the
+  whole engine running at the headset's call rate, and loaded audio and
+  effects are not rebuilt when the rate changes
+- No input level meter before a take, no count-in, no punch-in
+
 ### Web Audio engine (`engine/WebAudioEngine.ts`)
 
 - **Lookahead scheduler:** a 25 ms timer schedules everything in the next
@@ -245,7 +262,8 @@ Left over:
 Left over from this milestone:
 - Latency compensation trusts what the browser reports; a loopback
   calibration and a manual offset setting would make it exact
-- No input device picker (the system default input is used)
+- No input device picker in the Web Audio engine (the native engine has
+  one, in the transport bar)
 - Velocity for keyboard-played notes
 - Packaged builds need a microphone usage description (and signing) before
   macOS will grant input access

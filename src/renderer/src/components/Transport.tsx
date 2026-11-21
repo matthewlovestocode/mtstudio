@@ -1,16 +1,17 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { ADD_MENU, MENUS, acceleratorLabel, type MenuSection } from '@shared/menu'
-import type { NativeLatency } from '@shared/nativeEngine'
+import type { NativeInput, NativeLatency } from '@shared/nativeEngine'
 import { timeMap } from '@shared/timemap'
 import { Meter, NumberField } from './controls/fields'
 import { engine, nativeEngine } from '../engine'
 import { bridge, runCommand } from '../platform'
-import { toggleMonitor, togglePlay, toggleRecord } from '../recording'
+import { chooseInput, toggleMonitor, togglePlay, toggleRecord } from '../recording'
 import { setLoop, setTempo } from '../state/actions'
 import { MAX_ZOOM, MIN_ZOOM, useStudio } from '../state/store'
 import { formatBars, formatTime, useFrame } from '../util'
 import { Button, IconButton, Toggle } from './controls/buttons'
-import { MenuButton, Popover, type MenuItem, type Origin } from './controls/Popover'
+import { useLayout } from './layout'
+import { Caret, MenuButton, Popover, useMenu, type MenuItem, type Origin } from './controls/Popover'
 
 const IS_MAC = navigator.platform.startsWith('Mac')
 
@@ -121,6 +122,7 @@ export function Transport(): React.JSX.Element {
 
       <div className="tb-part tb-right">
         <div className="tb-group">
+          {nativeEngine && <InputMenu native={nativeEngine} />}
           <Toggle label="Monitor: hear the audio input through the armed track (use headphones)" pressed={monitor} onChange={() => void toggleMonitor()}>
             <Icon d="M3 10V8a5 5 0 0 1 10 0v2M3 9.5h1.5v4H3zM11.5 9.5H13v4h-1.5z" />
             <span className="tb-word">Monitor</span>
@@ -165,6 +167,51 @@ export function Transport(): React.JSX.Element {
         </div>
       </div>
     </header>
+  )
+}
+
+/**
+ * Which microphone is recorded from. The list is asked for when the pointer
+ * or the keyboard arrives at the button, so it is there, and current, by
+ * the time the button is pressed.
+ */
+function InputMenu({ native }: { native: NonNullable<typeof nativeEngine> }): React.JSX.Element {
+  const chosen = useLayout((s) => s.inputDevice)
+  const [inputs, setInputs] = useState<NativeInput[]>([])
+  const [menu, openMenu] = useMenu()
+  const refresh = (): void => void native.inputs().then(setInputs)
+  const usual = inputs.find((each) => each.isDefault)
+  const using = inputs.find((each) => each.name === chosen) ?? usual
+  return (
+    <>
+      <button
+        type="button"
+        className={`tb-input ${using?.callQuality ? 'warn' : ''}`}
+        title={using ? `Recording from ${using.name}${using.callQuality ? ', which cannot be recorded from: choose another' : ''}. Click to choose a microphone.` : 'Choose the microphone to record from'}
+        aria-label="Choose the microphone to record from"
+        aria-haspopup="menu"
+        onPointerEnter={refresh}
+        onFocus={refresh}
+        onClick={(event) =>
+          openMenu(event, [
+            { heading: 'Record from' },
+            { label: usual ? `System default (${usual.name})` : 'System default', checked: chosen === null, onSelect: () => void chooseInput(null) },
+            { separator: true },
+            ...inputs.map((each) => ({
+              // A Bluetooth headset's microphone is listed, so that it is plain why it is not on offer.
+              label: each.callQuality ? `${each.name} · call quality only` : each.name,
+              checked: chosen === each.name,
+              disabled: each.callQuality,
+              onSelect: () => void chooseInput(each.name)
+            }))
+          ])
+        }
+      >
+        <Icon d="M8 2.5a1.75 1.75 0 0 0-1.75 1.75v3.5a1.75 1.75 0 0 0 3.5 0v-3.5A1.75 1.75 0 0 0 8 2.5zM4.5 7.5a3.5 3.5 0 0 0 7 0M8 11v2.5" />
+        <Caret />
+      </button>
+      {menu}
+    </>
   )
 }
 

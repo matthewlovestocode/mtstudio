@@ -10,17 +10,18 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import { contentFolder } from './sfz'
 import { soundFontPath } from './soundfont'
-import type { NativeAsset, NativeCommand, NativeEvent, NativeLatency, NativePlugins, NativeTake } from '@shared/nativeEngine'
+import type { NativeAsset, NativeCommand, NativeEvent, NativeInput, NativeLatency, NativePlugins, NativeTake } from '@shared/nativeEngine'
 
 type AssetEvent = Extract<NativeEvent, { type: 'asset' }>
 type RenderedEvent = Extract<NativeEvent, { type: 'rendered' }>
 /** Events that answer a numbered request from this process, rather than going to the renderer. */
 type InputEvent = Extract<NativeEvent, { type: 'input' }>
+type InputsEvent = Extract<NativeEvent, { type: 'inputs' }>
 type TakeEvent = Extract<NativeEvent, { type: 'take' }>
 type CalibratedEvent = Extract<NativeEvent, { type: 'calibrated' }>
 type StreamEvent = Extract<NativeEvent, { type: 'stream' }>
 type PluginsEvent = Extract<NativeEvent, { type: 'plugins' }>
-type Answer = AssetEvent | RenderedEvent | InputEvent | TakeEvent | CalibratedEvent | StreamEvent | PluginsEvent
+type Answer = AssetEvent | RenderedEvent | InputEvent | InputsEvent | TakeEvent | CalibratedEvent | StreamEvent | PluginsEvent
 
 /** Where the engine binary is expected: `STUDIO_ENGINE_PATH`, or the build output of `npm run build:native`. */
 export function nativeEnginePath(): string {
@@ -80,7 +81,7 @@ export function startNativeEngine(
   createInterface({ input: child.stdout }).on('line', (line) => {
     try {
       const event = JSON.parse(line) as NativeEvent
-      if (event.type === 'asset' || event.type === 'rendered' || event.type === 'input' || event.type === 'take' || event.type === 'calibrated' || event.type === 'stream' || event.type === 'plugins') {
+      if (event.type === 'asset' || event.type === 'rendered' || event.type === 'input' || event.type === 'inputs' || event.type === 'take' || event.type === 'calibrated' || event.type === 'stream' || event.type === 'plugins') {
         loading.get(event.request)?.resolve(event)
         loading.delete(event.request)
       } else {
@@ -182,13 +183,24 @@ export function startNativeEngine(
       throw new Error('Studio is not allowed to use the microphone. Allow it in System Settings › Privacy & Security › Microphone.')
     }
     const request = ++lastRequest
-    const answer = await ask<InputEvent>(request, { type: 'setInput', request, trackId, monitor })
+    const answer = await ask<InputEvent>(request, { type: 'setInput', request, trackId, monitor, device: chosenInput ?? undefined })
     if (answer.error) throw new Error(answer.error)
     if (trackId) {
       input = answer.device || null
       reported = answer.latency ?? null
     }
   }
+
+  /** The input the user has chosen to record from; null for the system's default. */
+  let chosenInput: string | null = null
+  ipcMain.handle('engine:inputs', async (): Promise<NativeInput[]> => {
+    if (!child) return []
+    const request = ++lastRequest
+    return (await ask<InputsEvent>(request, { type: 'listInputs', request })).devices
+  })
+  ipcMain.handle('engine:chooseInput', (_event, name: string | null): void => {
+    chosenInput = typeof name === 'string' && name ? name : null
+  })
 
   ipcMain.handle('engine:setInput', async (_event, trackId: string | null, monitor: boolean): Promise<void> => {
     wanted = null

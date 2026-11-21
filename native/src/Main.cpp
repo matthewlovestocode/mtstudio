@@ -331,6 +331,7 @@ public:
         else if (type == "openStream") openStream (message);
         else if (type == "render") render (message);
         else if (type == "setInput") setInput (message);
+        else if (type == "listInputs") listInputs (message);
         else if (type == "calibrate") calibrate (message);
         else if (type == "stopRecording") stopRecording (message);
         else if (type == "play")
@@ -587,7 +588,12 @@ private:
         }
         else
         {
-            const auto error = inputChannels > 0 ? juce::String() : openInput (defaultInputName());
+            // The microphone asked for, or failing that the system's own choice. A different one from the one open means opening again.
+            const auto asked = message["device"].toString();
+            const auto name = asked.isNotEmpty() && inputNames().contains (asked) ? asked : defaultInputName();
+            const bool same = inputChannels > 0 && devices.getAudioDeviceSetup().inputDeviceName == name;
+            if (inputChannels > 0 && ! same) abandonTake();
+            const auto error = same ? juce::String() : openInput (name);
             if (error.isNotEmpty()) reply->setProperty ("error", error);
             const auto* strip = builder.find (trackId);
             engine.setMonitor (error.isEmpty() && (bool) message["monitor"] && strip != nullptr ? strip->uid : 0);
@@ -601,6 +607,50 @@ private:
         emit (juce::JSON::toString (holder, true));
         // The device was reopened, perhaps at another rate or buffer size.
         ready();
+    }
+
+    juce::StringArray inputNames()
+    {
+        if (auto* type = devices.getCurrentDeviceTypeObject()) return type->getDeviceNames (true);
+        return {};
+    }
+
+    /** The sample rates an input can run at; empty if it cannot be asked. */
+    juce::Array<double> inputRates (const juce::String& name)
+    {
+        if (auto* type = devices.getCurrentDeviceTypeObject())
+            if (const std::unique_ptr<juce::AudioIODevice> device { type->createDevice ({}, name) })
+                return device->getAvailableSampleRates();
+        return {};
+    }
+
+    /** A microphone that only runs at telephone rates: a Bluetooth headset's, in its hands-free mode. */
+    bool callQualityOnly (const juce::Array<double>& rates)
+    {
+        if (rates.isEmpty()) return false;
+        for (const double rate : rates) if (rate >= 32000) return false;
+        return true;
+    }
+
+    /** Answers `listInputs`: every input there is, which is the system's default, and whether each can be recorded from. */
+    void listInputs (const juce::var& message)
+    {
+        auto* reply = new juce::DynamicObject();
+        const juce::var holder (reply);
+        reply->setProperty ("type", "inputs");
+        reply->setProperty ("request", message["request"]);
+        juce::Array<juce::var> list;
+        const auto preferred = defaultInputName();
+        for (const auto& name : inputNames())
+        {
+            auto* each = new juce::DynamicObject();
+            each->setProperty ("name", name);
+            each->setProperty ("isDefault", name == preferred);
+            each->setProperty ("callQuality", callQualityOnly (inputRates (name)));
+            list.add (juce::var (each));
+        }
+        reply->setProperty ("devices", list);
+        emit (juce::JSON::toString (holder, true));
     }
 
     juce::String defaultInputName()
@@ -634,7 +684,12 @@ private:
         if (inputChannels > 0) return {};
         // Fall back to output only, so playback survives a failed attempt.
         devices.setAudioDeviceSetup (previous, true);
-        return error.isNotEmpty() ? error : juce::String ("No audio input device is available.");
+        // The commonest reason, and one the system's own message does not explain.
+        if (callQualityOnly (inputRates (name)))
+            return name + " is a Bluetooth headset's microphone, which only works at telephone quality. It cannot be recorded from here, and while "
+                   "it is in use the headset plays at that quality too. Choose another microphone (the computer's own, or a wired or USB one); "
+                   "the headset can still be used for listening.";
+        return error.isNotEmpty() ? name + " could not be opened: " + error : juce::String ("No audio input device is available.");
     }
 
     /**

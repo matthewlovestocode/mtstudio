@@ -23,6 +23,8 @@ export interface Layout {
   audition: boolean
   /** The ids of the instruments starred in the browser. */
   favourites: string[]
+  /** The audio input to record from, by name; null for the system's default. */
+  inputDevice: string | null
 }
 
 export const BROWSER = { min: 240, max: 480, default: 300 }
@@ -49,7 +51,7 @@ export const DOCK = { min: 140, default: 300 }
 export const ARRANGE_MIN = 120
 
 const KEY = 'studio.layout'
-const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [] }
+const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null }
 
 function stored(): Layout {
   try {
