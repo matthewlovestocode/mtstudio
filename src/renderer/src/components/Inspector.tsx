@@ -1,11 +1,34 @@
 import { useState, useSyncExternalStore } from 'react'
 import { EFFECTS, effectParam, formatParam, type ParamDef } from '@shared/effects'
-import { DEFAULT_SAMPLER, type BuiltInEffectType, type Effect, type InstrumentType, type PluginRef, type SamplerParams, type SynthParams, type Track, type Waveform } from '@shared/model'
+import {
+  DEFAULT_SAMPLER,
+  type BuiltInEffectType,
+  type Effect,
+  type InstrumentType,
+  type PluginRef,
+  type SamplerParams,
+  type SoundFontPreset,
+  type SynthParams,
+  type Track,
+  type Waveform
+} from '@shared/model'
 import { TextField } from './controls/fields'
 import { nativeEngine } from '../engine'
 import { loadSampleDialog } from '../platform'
 import { pluginLabel, scanPlugins, usePlugins } from '../plugins'
-import { addEffect, addPluginEffect, findClip, removeEffect, setInstrument, setInstrumentPlugin, setSend, updateEffect, updateTrack } from '../state/actions'
+import { DRUM_BANK, useSoundFontPresets } from '../soundfont'
+import {
+  addEffect,
+  addPluginEffect,
+  findClip,
+  removeEffect,
+  setInstrument,
+  setInstrumentPlugin,
+  setInstrumentSoundFont,
+  setSend,
+  updateEffect,
+  updateTrack
+} from '../state/actions'
 import { useStudio } from '../state/store'
 import { pitchName } from '../util'
 import { Button, IconButton, Segmented, Toggle } from './controls/buttons'
@@ -124,11 +147,25 @@ function Section(props: { title: string; aside?: React.ReactNode; children: Reac
 function InstrumentSection({ track }: { track: Track }): React.JSX.Element {
   const instrument = track.instrument ?? 'synth'
   const choices = usePluginChoices()
-  const groups: PickerGroup<InstrumentType | PluginRef>[] = [
+  const presets = useSoundFontPresets()
+  // The SoundFont's presets by where they sit: bank 0 is the General MIDI set, bank 128 the drum kits, and the rest variations on bank 0.
+  const sounds = (from: (preset: SoundFontPreset) => boolean, detail: (preset: SoundFontPreset) => string | undefined): { value: SoundFontPreset; label: string; detail?: string }[] =>
+    (presets ?? []).filter(from).map((preset) => ({ value: preset, label: preset.name, detail: detail(preset) }))
+  const groups: PickerGroup<InstrumentType | PluginRef | SoundFontPreset>[] = [
     { label: 'Built in', options: INSTRUMENTS.map(([value, label]) => ({ value, label })) },
+    { label: 'General MIDI', options: sounds((p) => p.bank === 0, (p) => String(p.program + 1)) },
+    { label: 'Drum kits', options: sounds((p) => p.bank === DRUM_BANK, () => undefined) },
+    { label: 'More sounds', options: sounds((p) => p.bank !== 0 && p.bank !== DRUM_BANK, (p) => `Bank ${p.bank}`) },
     { label: 'Plugins', options: choices.instruments.map((plugin) => ({ value: plugin, label: plugin.name, detail: [plugin.manufacturer, plugin.format === 'AudioUnit' ? 'AU' : plugin.format].filter(Boolean).join(' · ') })) }
   ]
-  const name = instrument === 'plugin' ? (track.plugin ? pluginLabel(track.plugin) : 'Plugin') : INSTRUMENTS.find(([value]) => value === instrument)![1]
+  const name =
+    instrument === 'plugin'
+      ? track.plugin
+        ? pluginLabel(track.plugin)
+        : 'Plugin'
+      : instrument === 'soundfont'
+        ? (track.soundfont?.name ?? 'SoundFont')
+        : INSTRUMENTS.find(([value]) => value === instrument)![1]
   return (
     <Section title="Instrument">
       <Picker
@@ -138,14 +175,24 @@ function InstrumentSection({ track }: { track: Track }): React.JSX.Element {
         placeholder="Search instruments"
         groups={groups.filter((group) => group.options.length)}
         actions={choices.actions}
-        onPick={(value) => (typeof value === 'string' ? setInstrument(track.id, value) : setInstrumentPlugin(track.id, value))}
+        onPick={(value) =>
+          typeof value === 'string' ? setInstrument(track.id, value) : 'description' in value ? setInstrumentPlugin(track.id, value) : setInstrumentSoundFont(track.id, value)
+        }
       />
+      {instrument === 'soundfont' && <SoundFontNote installed={presets !== null} />}
       {instrument === 'synth' && track.synth && <SynthControls track={track} synth={track.synth} />}
       {instrument === 'sampler' && <SamplerControls track={track} sampler={track.sampler ?? DEFAULT_SAMPLER} />}
       {instrument === 'drums' && <p className="insp-note">Each note name is a drum: C kick, D snare, F♯ hat, A♯ open hat. The piano roll shows them all.</p>}
       {instrument === 'plugin' && <PluginControls track={track} effectId={null} />}
     </Section>
   )
+}
+
+/** Says where a SoundFont instrument's sound comes from, or why it cannot be heard. */
+function SoundFontNote({ installed }: { installed: boolean }): React.JSX.Element {
+  if (!nativeEngine) return <p className="insp-note">SoundFont instruments need the native engine. With this one the track is silent.</p>
+  if (!installed) return <p className="insp-note insp-error">The SoundFont is not installed, so this track is silent. Run `npm run fetch:content` to download it.</p>
+  return <p className="insp-note">Played from MuseScore General, an open SoundFont (MIT licence).</p>
 }
 
 function SynthControls({ track, synth }: { track: Track; synth: SynthParams }): React.JSX.Element {

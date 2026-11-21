@@ -94,6 +94,48 @@ Left over:
   for instruments, plugins and files
 - The mixer has no sends, effect slots or master fader
 
+### Instruments and sound content
+
+The native engine is where instruments are heading: new ones are written
+once, in C++, and the Web Audio engine's three (synth, drum machine,
+sampler) stay as they are. A track whose instrument needs the native engine
+is silent in the Web Audio engine, and the inspector says so.
+
+- **SoundFont (`native/src/SoundFont.h`):** a track's instrument can be a
+  preset of a General MIDI SoundFont, played by FluidSynth (LGPL-2.1, the
+  reference player, built as a static library with its optional parts
+  switched off; see `native/CMakeLists.txt`). Each track has a synthesiser
+  of its own, which reads in only the samples its preset uses: the grand
+  piano, the largest, costs about 120 MB and most presets far less. It is
+  sent notes as plugin instruments are, on the exact sample. The
+  SoundFont's own reverb and chorus are off; the track's effects and sends
+  do that work. The app lists the presets by reading the file's index
+  itself (`src/main/soundfont.ts`). TinySoundFont was tried first and
+  dropped: it does not apply a SoundFont's modulators, which MuseScore
+  General's pianos are built on, and they came out 20 dB too quiet at
+  middle velocities.
+- **Content (`native/content`):** sound files are not in the repository.
+  `manifest.json` lists each with where it comes from, its SHA-256, its
+  licence and whom to credit; `npm run fetch:content` downloads and checks
+  them; the licence texts in `licenses/` are committed and must go wherever
+  the files go. So far: MuseScore General (MIT), 128 General MIDI
+  instruments, 37 drum kits and about 140 variations.
+- **Licences:** the app is AGPL-3.0-or-later (JUCE's open-source terms).
+  Content is taken under CC0, MIT or CC-BY; non-commercial licences are
+  not; share-alike is decided case by case.
+
+Left over:
+- Levels have been checked (every General MIDI preset rises evenly with
+  velocity at middle C, none is silent); tone has not been listened to
+- Two tracks on the same preset each read its samples in; whether
+  FluidSynth shares them has not been measured
+- The live path (playing from the keyboard, the piano roll's audition) has
+  only been exercised through the offline render, which shares the mixing
+  but not the note commands
+- The piano roll shows note names, not drum names, for a SoundFont drum kit
+- SFZ instruments (sfizz), a library to browse and download content from,
+  and Surge XT as a bundled synth
+
 ### Web Audio engine (`engine/WebAudioEngine.ts`)
 
 - **Lookahead scheduler:** a 25 ms timer schedules everything in the next

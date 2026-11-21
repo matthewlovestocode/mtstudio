@@ -91,7 +91,7 @@ struct Strip
     /** Smoothed send levels, by position in the track's list of sends. */
     static constexpr int maxSends = 8;
     struct SendState { uint32_t bus = 0; float gain = 0; } sends[maxSends];
-    /** For a track whose instrument is a plugin: the notes it holds, and the messages for it in this chunk. */
+    /** For a track whose instrument is a plugin or a SoundFont: the notes it holds, and the messages for it in this chunk. */
     static constexpr int maxPluginNotes = 128, maxPluginEvents = 512;
     PluginNote pluginNotes[maxPluginNotes];
     int pluginNoteCount = 0;
@@ -160,6 +160,7 @@ inline double automationValue (const std::vector<AutoPoint>& points, double tick
 }
 
 struct PluginSlot;
+class SoundFontPlayer;
 /** How many frames late a plugin's output is, by its own account. Message thread. */
 int pluginLatency (const PluginSlot& plugin);
 
@@ -232,6 +233,10 @@ struct TrackSnapshot
     Instrument instrument = Instrument::none;
     /** The instrument, when it is a hosted plugin. */
     std::shared_ptr<PluginSlot> plugin;
+    /** The instrument, when it is a SoundFont preset. It is sent notes as a plugin is. */
+    std::shared_ptr<SoundFontPlayer> soundfont;
+    /** Whether the instrument is sent notes as messages (a plugin or a SoundFont) rather than played by the engine's own voices. */
+    bool takesEvents() const { return instrument == Instrument::plugin || instrument == Instrument::soundfont; }
     SynthParams params;
     SamplerParams sampler;
     /** Keeps the sampler's sample alive for as long as this snapshot is. */
@@ -295,6 +300,8 @@ private:
     /** Effects in use, by track id and effect id, so each keeps its tail when the project is edited. */
     std::map<juce::String, std::shared_ptr<EffectUnit>> effects;
     std::vector<StretchJob> wanted;
+    /** SoundFont players by track id, kept so their notes ring on across edits. */
+    std::map<juce::String, std::shared_ptr<SoundFontPlayer>> soundfonts;
     /** Compensation delays by track id, kept so they hold their audio across edits. */
     std::map<juce::String, std::shared_ptr<CompDelay>> delays;
     int lastLatency = 0;

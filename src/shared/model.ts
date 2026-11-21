@@ -67,8 +67,20 @@ export interface SynthParams {
   resonance: number
 }
 
-/** 'plugin' is a VST3 or Audio Unit instrument (`Track.plugin`), which only the native engine can play. */
-export type InstrumentType = 'synth' | 'drums' | 'sampler' | 'plugin'
+/**
+ * 'plugin' is a VST3 or Audio Unit instrument (`Track.plugin`) and 'soundfont' a preset of the bundled
+ * SoundFont (`Track.soundfont`). Only the native engine can play either.
+ */
+export type InstrumentType = 'synth' | 'drums' | 'sampler' | 'plugin' | 'soundfont'
+
+/** A preset of a SoundFont: an instrument such as a piano, or (in bank 128) a drum kit. */
+export interface SoundFontPreset {
+  bank: number
+  /** The program number within the bank, 0-127. */
+  program: number
+  /** As the SoundFont names it; kept so the track can be labelled without the file to hand. */
+  name: string
+}
 
 /** A VST3 or Audio Unit plugin, as the native engine's scan found it. */
 export interface PluginRef {
@@ -148,6 +160,8 @@ export interface Track {
   /** The instrument when `instrument` is 'plugin', and its settings (as `Effect.state`). */
   plugin?: PluginRef
   pluginState?: string
+  /** The instrument when `instrument` is 'soundfont'. */
+  soundfont?: SoundFontPreset
   /** Insert effects, in signal order. */
   effects?: Effect[]
   sends?: Send[]

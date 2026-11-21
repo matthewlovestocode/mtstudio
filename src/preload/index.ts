@@ -33,6 +33,7 @@ const bridge: StudioBridge = {
   exportFile: (defaultName, data) => ipcRenderer.invoke('file:export', defaultName, data),
   writeAutosave: (data) => ipcRenderer.invoke('autosave:write', data),
   readAutosave: () => ipcRenderer.invoke('autosave:read'),
+  soundFontPresets: () => ipcRenderer.invoke('soundfont:presets'),
   pathForFile: (file) => webUtils.getPathForFile(file),
   onMenuCommand: (handler) => {
     ipcRenderer.on('menu', (_event, command: MenuCommand) => handler(command))

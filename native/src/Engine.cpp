@@ -1,5 +1,6 @@
 #include "Engine.h"
 #include "Plugins.h"
+#include "SoundFont.h"
 #include "Stream.h"
 
 namespace studio
@@ -153,7 +154,7 @@ void Engine::apply (const Command& command, const Snapshot& snapshot)
             for (const auto& track : snapshot.tracks)
             {
                 if (track.strip->uid != command.strip) continue;
-                if (track.instrument == Instrument::plugin)
+                if (track.takesEvents())
                 {
                     // Starting a note lets go of the same pitch first, in `startVoice`.
                     if (command.type == Command::noteOn) startVoice (track, command.pitch, command.velocity, true, -1, 0, 0);
@@ -179,9 +180,9 @@ void Engine::apply (const Command& command, const Snapshot& snapshot)
 void Engine::startVoice (const TrackSnapshot& track, int pitch, float velocity, bool live, double seconds, int offset, int frames)
 {
     auto& strip = *track.strip;
-    if (track.instrument == Instrument::plugin)
+    if (track.takesEvents())
     {
-        // A plugin is sent the note; it is let go in `mixStrip` when its time comes.
+        // A plugin or a SoundFont is sent the note; it is let go in `mixStrip` when its time comes.
         strip.pluginRelease (pitch, offset);
         if (strip.pluginNoteCount == Strip::maxPluginNotes) return;
         strip.pluginEvent (offset, 0x90, juce::jlimit (0, 127, pitch), juce::jlimit (1, 127, (int) std::lround (velocity * 127.0f)));
@@ -418,7 +419,7 @@ void Engine::mixStrip (const TrackSnapshot& track, int frames)
 {
     auto& strip = *track.strip;
 
-    if (track.plugin != nullptr)
+    if (track.plugin != nullptr || track.soundfont != nullptr)
     {
         // Notes that end within this chunk are let go on their exact frame.
         for (int n = 0; n < strip.pluginNoteCount;)
@@ -428,7 +429,8 @@ void Engine::mixStrip (const TrackSnapshot& track, int frames)
             strip.pluginEvent ((int) std::max<int64_t> (0, note.offFrame - blockFrame), 0x80, note.pitch, 0);
             strip.pluginNotes[n] = strip.pluginNotes[--strip.pluginNoteCount];
         }
-        track.plugin->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount, true);
+        if (track.plugin != nullptr) track.plugin->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount, true);
+        else track.soundfont->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount);
     }
     else strip.pluginNoteCount = 0;
     strip.pluginEventCount = 0;

@@ -3,6 +3,7 @@
   "productName": "mtstudio",
   "version": "0.1.0",
   "description": "A digital audio workstation built on Electron",
+  "license": "AGPL-3.0-or-later",
   "main": "./out/main/index.js",
   "private": true,
   "scripts": {
@@ -11,7 +12,8 @@
     "build:native": "cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release && cmake --build native/build -j 8",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "fetch:content": "node scripts/fetch-content.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

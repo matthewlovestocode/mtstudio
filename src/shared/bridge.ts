@@ -3,6 +3,7 @@ import type { NativeEngineBridge } from './nativeEngine'
 import type { StreamInfo } from './pcm'
 
 import type { MenuCommand } from './menu'
+import type { SoundFontPreset } from './model'
 
 export type { MenuCommand }
 
@@ -63,6 +64,8 @@ export interface StudioBridge {
   /** Crash-recovery snapshot; null clears it. */
   writeAutosave(data: string | null): Promise<void>
   readAutosave(): Promise<string | null>
+  /** The presets of the SoundFont that General MIDI instruments are played from; null if it is not installed. */
+  soundFontPresets(): Promise<SoundFontPreset[] | null>
   /** Absolute path of a File chosen or dropped by the user. */
   pathForFile(file: File): string
   onMenuCommand(handler: (command: MenuCommand) => void): void

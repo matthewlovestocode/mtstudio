@@ -254,7 +254,7 @@ private:
 // ── A voice of any instrument ──────────────────────────────────────────────
 
 /** `plugin` is a hosted instrument plugin: it is sent notes rather than played by a `Voice`. */
-enum class Instrument { none, synth, drums, sampler, plugin };
+enum class Instrument { none, synth, drums, sampler, plugin, soundfont };
 
 struct Voice
 {

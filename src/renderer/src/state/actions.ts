@@ -20,7 +20,8 @@ import {
   type Note,
   type PluginRef,
   type Project,
-  type Track
+  type Track,
+  type SoundFontPreset
 } from '@shared/model'
 import { timeMap, type TimeMap } from '@shared/timemap'
 import { useStudio } from './store'
@@ -139,6 +140,11 @@ export function addPluginEffect(trackId: Id, plugin: PluginRef): void {
 /** Makes a plugin the track's instrument, with the settings it starts with. */
 export function setInstrumentPlugin(trackId: Id, plugin: PluginRef): void {
   edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: undefined })))
+}
+
+/** Makes a preset of the SoundFont the track's instrument. */
+export function setInstrumentSoundFont(trackId: Id, soundfont: SoundFontPreset): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'soundfont', soundfont })))
 }
 
 /** Records the settings a plugin reports (`effectId` null for the track's instrument). A run of reports is one undo step. */

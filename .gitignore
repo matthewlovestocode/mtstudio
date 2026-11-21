@@ -14,3 +14,9 @@ native/deps
 .env
 .env.*
 *.log
+
+# Sound content is fetched (npm run fetch:content), not committed. Its
+# manifest and the licences that go with it are.
+native/content/*
+!native/content/manifest.json
+!native/content/licenses/
