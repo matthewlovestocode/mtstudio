@@ -4,7 +4,7 @@ A digital audio workstation for the desktop: tracks, a piano roll, a step sequen
 
 ## Download the app
 
-For Macs with Apple silicon (M1 or later), macOS 12 or later. On an Intel Mac, Windows or Linux, [run it from source](#run-from-source).
+For Macs with Apple silicon (M1 or later), macOS 13 or later. On an Intel Mac, Windows or Linux, [run it from source](#run-from-source).
 
 **The short way.** Paste this into Terminal. It downloads the latest release, puts mtstudio in Applications and opens it:
 
