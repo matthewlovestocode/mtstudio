@@ -1,0 +1,16 @@
+node_modules
+out
+dist
+.DS_Store
+
+# Native engine: build output, the built binary, and the JUCE checkout
+# (native/CMakeLists.txt fetches the pinned tag when it is absent).
+native/build
+native/bin
+native/deps
+
+# Local, per-machine settings and secrets.
+.claude/settings.local.json
+.env
+.env.*
+*.log

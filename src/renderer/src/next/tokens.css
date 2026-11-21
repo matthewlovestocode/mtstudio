@@ -1,0 +1,67 @@
+/*
+ * Design tokens for the reworked interface: every size, colour and type
+ * setting a control may use. Set on `.ui-next`, which wraps the preview, each
+ * panel window and each pop-up layer, so the current interface never sees
+ * them. Controls take their values from here and nowhere else.
+ */
+
+.ui-next {
+  /* Space: a 4px rhythm with a 2px half-step for tight groups. */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 24px;
+
+  /* Type. */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-md: 12px;
+  --text-lg: 14px;
+  --weight-normal: 400;
+  --weight-strong: 600;
+  /* For the small capital labels on panels and strips. */
+  --caps-spacing: 0.06em;
+
+  /* Shape. */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --control-sm: 20px;
+  --control-md: 24px;
+  --control-lg: 28px;
+
+  /* Surfaces, darkest to lightest: a well sunk into a panel, the window, a panel, a raised control, the same under the pointer. */
+  --surface-well: #111318;
+  --surface-window: #15171c;
+  --surface-panel: #1c1f26;
+  --surface-raised: #232730;
+  --surface-hover: #2b303b;
+
+  --border: #2e333e;
+  --border-soft: #262a33;
+  --border-strong: #414958;
+
+  --ink: #dfe3ea;
+  --ink-muted: #8791a1;
+  --ink-faint: #5d6675;
+
+  /* Meaning. Each has the colour itself, the text to put on it, and a wash for backgrounds. */
+  --accent: #5b9cf5;
+  --accent-ink: #06162e;
+  --accent-wash: rgb(91 156 245 / 0.16);
+  --ok: #6fcf8a;
+  --ok-ink: #06210f;
+  --warn: #e8b84a;
+  --warn-ink: #201a05;
+  --danger: #f07178;
+  --danger-ink: #2a0709;
+  --danger-wash: rgb(240 113 120 / 0.14);
+
+  --shadow-pop: 0 10px 28px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(0 0 0 / 0.25);
+  --focus-ring: 0 0 0 2px var(--accent);
+  --ease: 0.12s ease;
+}
