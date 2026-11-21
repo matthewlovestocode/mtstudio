@@ -2,25 +2,21 @@
 
 A digital audio workstation for the desktop: tracks, a piano roll, a step sequencer with drum patterns by style, bass, chord and synth parts, mic recording, effects, and SoundFont, SFZ and plugin instruments.
 
-## Download the app
+## Install the app
 
-For Macs with Apple silicon (M1 or later), macOS 13 or later. On an Intel Mac, Windows or Linux, [run it from source](#run-from-source).
-
-**The short way.** Paste this into Terminal. It downloads the latest release, puts mtstudio in Applications and opens it:
+For Macs with Apple silicon (M1 or later) on macOS 13 or later. Paste this into Terminal; it downloads the latest release, puts mtstudio in Applications and opens it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/matthewlovestocode/mtstudio/main/scripts/install.sh | bash
 ```
 
-**By hand.**
+Or download `mtstudio-…-mac-arm64.zip` from the [latest release](https://github.com/matthewlovestocode/mtstudio/releases/latest), drag the app into Applications, and approve it once under System Settings › Privacy & Security › **Open Anyway**. mtstudio is not signed with an Apple developer certificate, which is why macOS asks; the command above does not meet that warning.
 
-1. Download `mtstudio-…-mac-arm64.zip` from the [latest release](https://github.com/matthewlovestocode/mtstudio/releases/latest).
-2. Unzip it and drag mtstudio into Applications.
-3. Open it. macOS will say it cannot verify the app, because mtstudio is not signed with an Apple developer certificate. Click **Done**, then go to System Settings › Privacy & Security, scroll down, and click **Open Anyway**. This is needed once. (The short way above does not meet this warning.)
+The first time it opens, mtstudio downloads its instrument sounds (216 MB), then shows a demo project. Press Space to play.
 
-Either way, the first time mtstudio starts it downloads its instrument sounds (216 MB), showing how far it has got. After that it opens straight to a demo project; press Space to play.
+**[The full install guide](docs/INSTALL.md)** has every step, what to expect on first run, updating, removing, and what to do if something goes wrong. It is the page to send to someone you are sharing mtstudio with.
 
-To update, do the same again with the newer release. macOS may ask about the microphone again after an update.
+On an Intel Mac, Windows or Linux, run it from source, below.
 
 ## Run from source
 
@@ -103,17 +99,17 @@ This runs on the browser's own audio. The built-in synth, sampler and drum machi
 
 ## Making a release
 
-For whoever maintains the project. Set the new version in `package.json`, commit, then tag it and push the tag:
+For whoever maintains the project. Set the new version in `package.json` (say `0.2.0`), commit and push, then tag that commit with the same number and push the tag:
 
 ```bash
-git tag v0.1.0
+git tag v0.2.0
 ```
 
 ```bash
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
-GitHub Actions ([release.yml](.github/workflows/release.yml)) builds the engine and the app and attaches the zip to a release of that name. `npm run dist` builds the same zip locally, into `dist/`.
+GitHub Actions ([release.yml](.github/workflows/release.yml)) builds the engine and the app and attaches the zip to a release of that name. `npm run dist` builds the same zip locally, into `dist/`. The build stops if the tag and the version in `package.json` differ. The app is signed ad hoc, as there is no Apple developer certificate, and is built for Apple silicon only.
 
 ## If something goes wrong running from source
 

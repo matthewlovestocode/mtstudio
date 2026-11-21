@@ -38,7 +38,8 @@ if [ ! -w "$folder" ]; then
   mkdir -p "$folder"
 fi
 
-if pgrep -qf "$folder/mtstudio.app/Contents/MacOS/mtstudio"; then
+# Matched from the start of the command line, so that only the app itself counts and not a command that mentions it.
+if pgrep -qf "^$folder/mtstudio.app/Contents/MacOS/mtstudio( |\$)"; then
   echo "mtstudio is running. Quit it and run this again." >&2
   exit 1
 fi

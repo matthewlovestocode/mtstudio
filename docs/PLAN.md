@@ -340,8 +340,9 @@ Left over from this milestone:
 - No input device picker in the Web Audio engine (the native engine has
   one, in the transport bar)
 - Velocity for keyboard-played notes
-- Packaged builds need a microphone usage description (and signing) before
-  macOS will grant input access
+- Packaged builds carry a microphone usage description and an ad hoc
+  signature (`electron-builder.yml`); with no developer certificate the
+  permission is asked for again after each update
 
 ### 3 — Mixing and instruments (done)
 - Insert effects per track: 3-band EQ, compressor, feedback delay, algorithmic
@@ -668,8 +669,10 @@ Remaining:
   the app before it is saved, as with the Web Audio engine; the engine
   could write straight to the chosen path. Temporary folders are left
   behind (empty unless a transfer was under way) if the app is killed
-- Packaging: ship and sign the binary in the app's resources; Windows and
-  Linux builds are untried
+- Packaging: the engine ships in the app's resources, signed ad hoc, for
+  Apple silicon only (`electron-builder.yml`, `.github/workflows/release.yml`,
+  `docs/INSTALL.md`). Not notarised, no Intel build, no auto-update; Windows
+  and Linux builds are untried
 - An engine setting in the UI instead of an environment variable
 - Some callers' alerts are worded for other failures ("Could not read…"
   when the native engine declines an import)
