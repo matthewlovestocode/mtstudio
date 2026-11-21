@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react'
 import { PPQ, type MidiClip, type Note, type Track } from '@shared/model'
 import { timeMap } from '@shared/timemap'
-import { ACCENT, DIVISIONS, GHOST, NORMAL, PATTERNS, PATTERN_GROUPS, fill, hits, humanise, kitFor, patternNotes, vary } from '../drums'
+import { ACCENT, DIVISIONS, GHOST, NORMAL, PATTERNS, PATTERN_GROUPS, fill, hits, humanise, kitFor, kitNameFor, patternNotes, vary, type Pattern } from '../drums'
+import { roomFor } from '../bass'
 import { engine } from '../engine'
 import { togglePlay } from '../recording'
-import { findClip, replaceClip, setLoop, updateClip } from '../state/actions'
+import { DRUM_BANK, useSoundFontPresets } from '../soundfont'
+import { findClip, replaceClip, setInstrument, setInstrumentSoundFont, setLoop, updateClip } from '../state/actions'
 import { useStudio } from '../state/store'
 import { startDrag, useFrame } from '../util'
 import { Button, Segmented, Toggle } from './controls/buttons'
@@ -40,6 +42,14 @@ export function StepSequencer({ track, clip, viewSwitch }: { track: Track; clip:
   const playing = useStudio((s) => s.playing)
   const division = useLayout((s) => s.stepDivision)
   const kit = kitFor(track)
+  const matchKit = useLayout((s) => s.patternKits)
+  const grow = useLayout((s) => s.patternGrow)
+  // The SoundFont's drum kits, where there is a SoundFont: the native engine with its sound content.
+  const presets = useSoundFontPresets()
+  const kits = (presets ?? []).filter((each) => each.bank === DRUM_BANK)
+  const instrument = track.instrument ?? 'synth'
+  const onSoundFont = instrument === 'soundfont' && track.soundfont?.bank === DRUM_BANK
+  const kitName = instrument === 'drums' ? 'Drum machine' : onSoundFont ? track.soundfont!.name : null
   const chosenRows = useDrumRows((s) => s[track.id])
   const [menu, openMenu] = useMenu()
   const [cursor, setCursor] = useState<{ row: number; step: number } | null>(null)
@@ -206,6 +216,26 @@ export function StepSequencer({ track, clip, viewSwitch }: { track: Track; clip:
     }
   }
 
+  /**
+   * Starts the clip from a pattern. A track on the drum machine or one of the
+   * SoundFont's kits is moved to the kit the pattern's style belongs on, if
+   * that is wanted; a track playing anything else was put there by hand and
+   * stays. One undo step either way.
+   */
+  const startFrom = (pattern: Pattern): void => {
+    const gesture = `pattern-${clip.id}`
+    const wanted = matchKit && kitName !== null ? kits.find((each) => each.name === kitNameFor(pattern)) : undefined
+    const moving = wanted && !(onSoundFont && track.soundfont!.program === wanted.program)
+    if (moving) setInstrumentSoundFont(track.id, wanted, gesture)
+    // A pattern takes eight bars to run its course, so a shorter clip is made that long, or as long as the next clip on the track leaves room for.
+    const now = latest()
+    const length = grow ? roomFor(project, track, now) : now.length
+    replaceClip({ ...now, length, notes: patternNotes(pattern, moving ? kitFor({ ...track, instrument: 'soundfont', soundfont: wanted }) : kit, length) }, gesture)
+    // A loop round the clip goes on being a loop round the clip.
+    if (looping && length !== now.length) setLoop({ end: now.start + length }, gesture)
+    endGesture()
+  }
+
   const setRows = (next: number[]): void => useDrumRows.setState({ [track.id]: next })
   const spare = Object.keys(kit.names)
     .map(Number)
@@ -234,9 +264,25 @@ export function StepSequencer({ track, clip, viewSwitch }: { track: Track; clip:
                 .sort((a, b) => (PATTERN_GROUPS[style]?.indexOf(a.group ?? '') ?? 0) - (PATTERN_GROUPS[style]?.indexOf(b.group ?? '') ?? 0))
                 .map((each) => ({ value: each, label: each.name, detail: `${each.bpm} bpm`, sub: each.group }))
             }))}
-            onPick={(pattern) => write(patternNotes(pattern, kit, clip.length))}
+            onPick={startFrom}
+            actions={[{ label: `${grow ? '✓ ' : ''}Make the clip eight bars long`, onSelect: () => setLayout({ patternGrow: !grow }) }]}
           />
         </div>
+        {kits.length > 0 && kitName !== null && (
+          <div className="ss-picker ss-kit">
+            <Picker
+              label={`Kit: ${kitName}`}
+              title="The drum kit this track plays"
+              placeholder="Search kits"
+              groups={[
+                { options: [{ value: null, label: 'Drum machine', detail: 'built in' }] },
+                { label: 'Sampled kits', options: kits.map((each) => ({ value: each, label: each.name })) }
+              ]}
+              onPick={(preset) => (preset ? setInstrumentSoundFont(track.id, preset) : setInstrument(track.id, 'drums'))}
+              actions={[{ label: `${matchKit ? '✓ ' : ''}Match the kit to the pattern`, onSelect: () => setLayout({ patternKits: !matchKit }) }]}
+            />
+          </div>
+        )}
         <div className="pr-group">
           <Button title="A relative of this rhythm: a couple of small changes" disabled={!clip.notes.length} onClick={() => write(vary(latest(), kit))}>
             Vary

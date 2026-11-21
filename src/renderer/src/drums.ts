@@ -8,6 +8,7 @@ import { DRUM_BANK } from './soundfont'
 
 /** The parts of a kit a rhythm is written for. */
 export type Role = 'kick' | 'snare' | 'clap' | 'rim' | 'hat' | 'open' | 'tomLow' | 'tomHigh' | 'crash' | 'ride' | 'cowbell' | 'shaker' | 'congaHigh' | 'congaLow'
+  | 'congaMute' | 'bongoHigh' | 'bongoLow' | 'timbaleHigh' | 'timbaleLow' | 'claves' | 'agogoHigh' | 'agogoLow' | 'cabasa' | 'guiro' | 'tambourine'
 
 export interface Kit {
   /** The note each part is on; a kit need not have every part. */
@@ -23,12 +24,14 @@ const GM_NAMES: Record<number, string> = {
   35: 'Kick 2', 36: 'Kick', 37: 'Rim', 38: 'Snare', 39: 'Clap', 40: 'Snare 2', 41: 'Floor tom', 42: 'Hat', 43: 'Floor tom 2', 44: 'Pedal hat',
   45: 'Low tom', 46: 'Open hat', 47: 'Mid tom', 48: 'Mid tom 2', 49: 'Crash', 50: 'High tom', 51: 'Ride', 52: 'China', 53: 'Ride bell', 54: 'Tambourine',
   55: 'Splash', 56: 'Cowbell', 57: 'Crash 2', 59: 'Ride 2', 60: 'Bongo high', 61: 'Bongo low', 62: 'Conga mute', 63: 'Conga high', 64: 'Conga low',
-  65: 'Timbale high', 66: 'Timbale low', 67: 'Agogo high', 68: 'Agogo low', 69: 'Cabasa', 70: 'Maracas', 75: 'Claves', 76: 'Wood block high',
-  77: 'Wood block low', 80: 'Triangle mute', 81: 'Triangle'
+  65: 'Timbale high', 66: 'Timbale low', 67: 'Agogo high', 68: 'Agogo low', 58: 'Vibraslap', 69: 'Cabasa', 70: 'Maracas', 71: 'Whistle', 72: 'Whistle long', 73: 'Guiro', 74: 'Guiro long', 75: 'Claves', 76: 'Wood block high',
+  77: 'Wood block low', 78: 'Cuica mute', 79: 'Cuica', 80: 'Triangle mute', 81: 'Triangle'
 }
 
 const GM_KIT: Kit = {
-  roles: { kick: 36, snare: 38, clap: 39, rim: 37, hat: 42, open: 46, tomLow: 45, tomHigh: 50, crash: 49, ride: 51, cowbell: 56, shaker: 70, congaHigh: 63, congaLow: 64 },
+  roles: { kick: 36, snare: 38, clap: 39, rim: 37, hat: 42, open: 46, tomLow: 45, tomHigh: 50, crash: 49, ride: 51, cowbell: 56, shaker: 70, congaHigh: 63, congaLow: 64,
+    congaMute: 62, bongoHigh: 60, bongoLow: 61, timbaleHigh: 65, timbaleLow: 66, claves: 75, agogoHigh: 67, agogoLow: 68, cabasa: 69, guiro: 73, tambourine: 54
+  },
   names: GM_NAMES,
   rows: [49, 51, 46, 42, 39, 38, 50, 45, 36]
 }
@@ -40,8 +43,26 @@ const BUILT_IN_KIT: Kit = {
   rows: [46, 42, 39, 38, 37, 45, 41, 36]
 }
 
+/** Sounds a SoundFont kit is silent on, by the kit's name: its patterns play those parts on the nearest thing it has. */
+const KIT_GAPS: Record<string, Role[]> = { 'TR-808': ['timbaleHigh', 'timbaleLow'] }
+const gapped = new Map<string, Kit>()
+
 export function kitFor(track: Track): Kit {
-  return (track.instrument ?? 'synth') === 'drums' ? BUILT_IN_KIT : GM_KIT
+  if ((track.instrument ?? 'synth') === 'drums') return BUILT_IN_KIT
+  const name = track.instrument === 'soundfont' ? (track.soundfont?.name ?? '') : ''
+  const gaps = KIT_GAPS[name]
+  if (!gaps) return GM_KIT
+  let kit = gapped.get(name)
+  if (!kit) {
+    const silent = new Set(gaps.map((role) => GM_KIT.roles[role]))
+    kit = {
+      roles: Object.fromEntries(Object.entries(GM_KIT.roles).filter(([role]) => !gaps.includes(role as Role))),
+      names: Object.fromEntries(Object.entries(GM_NAMES).filter(([pitch]) => !silent.has(Number(pitch)))),
+      rows: GM_KIT.rows
+    }
+    gapped.set(name, kit)
+  }
+  return kit
 }
 
 /** Whether a track looks like drums, and so opens in the step sequencer: by its instrument where that says, otherwise by its name. */
@@ -85,7 +106,7 @@ export function hits(pitch: number, start: number, stepTicks: number, velocity: 
 /**
  * A rhythm, a part to a line, in sixteenth notes: `x` a hit, `X` an accent,
  * `o` a ghost note, `2` `3` `4` a roll of that many, `-` a rest. Lines are
- * one bar (16) or two (32) long and are repeated to fill the clip.
+ * one bar (16) or two (32) long. `patternNotes` makes a part of them.
  */
 export interface Pattern {
   name: string
@@ -101,7 +122,30 @@ export interface Pattern {
 /** The order of the groups within the styles that have them. */
 export const PATTERN_GROUPS: Record<string, string[]> = {
   Reggaeton: ['Basics', 'Scenes', 'Dominican dembow', 'Kick', 'Snare', 'Hats and percussion', 'Fills and sections'],
-  Detroit: ['Techno', 'Electro', 'Ghettotech', 'House']
+  Detroit: ['Techno', 'Electro', 'Ghettotech', 'House'],
+  Dancehall: ['Basics', 'Modern', 'Trap dancehall', 'Digital and old school', '90s hardcore', 'Hard', 'Percussion', 'Kick and snare', 'Fills and sections']
+}
+
+/**
+ * The SoundFont drum kit each style belongs on, by the kit's name; a style
+ * not listed is at home on the standard kit. `Style/Group` speaks for one
+ * group of a style.
+ */
+const STYLE_KITS: Record<string, string> = {
+  Trap: 'TR-808', Drill: 'TR-808', 'Hip hop': 'TR-808', 'R&B': 'TR-808', 'Bass music': 'TR-808',
+  House: 'Electronic', Techno: 'Electronic', Garage: 'Electronic', Detroit: 'Electronic', 'Detroit/Electro': 'TR-808', 'Detroit/Ghettotech': 'TR-808',
+  Reggaeton: 'Power', Dancehall: 'Electronic', 'Dancehall/Trap dancehall': 'TR-808', 'Dancehall/90s hardcore': 'TR-808', Reggae: 'Room', Rock: 'Power', Funk: 'Room', Breakbeat: 'Room'
+}
+/** Patterns that go against their style. */
+const PATTERN_KITS: Record<string, string> = {
+  'Boom bap': 'Room', 'Boom bap, heavy': 'Room', 'Boom bap, two bars': 'Room', 'Lo-fi': 'Room', Motown: 'Standard', 'Slow jam': 'Standard',
+  Disco: 'Standard', Synthwave: 'Electronic', 'Dance pop': 'Electronic', Dubstep: 'Electronic', 'Future bass': 'Electronic', 'Big beat': 'Power'
+}
+export const DEFAULT_KIT = 'Standard'
+
+/** The name of the SoundFont drum kit a pattern is at home on. */
+export function kitNameFor(pattern: Pattern): string {
+  return PATTERN_KITS[pattern.name] ?? STYLE_KITS[`${pattern.style}/${pattern.group}`] ?? STYLE_KITS[pattern.style] ?? DEFAULT_KIT
 }
 
 export const PATTERNS: Pattern[] = [
@@ -172,6 +216,7 @@ export const PATTERNS: Pattern[] = [
     style: 'House',
     bpm: '110–120',
     parts: {
+      tambourine: '----x-------x---',
       open: '--x---x---x---x-',
       hat: 'xox-xox-xox-xox-',
       snare: '----X-------X---',
@@ -281,8 +326,8 @@ export const PATTERNS: Pattern[] = [
     bpm: '88–100',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
-      tomHigh: '-----------------------------xx-',
-      tomLow: '-------------------------------x',
+      timbaleHigh: '-----------------------------xx-',
+      timbaleLow: '-------------------------------x',
       snare: '---x--x----x--x----x--x----x--x-',
       kick: 'X---X---X---X---X---X---X---X---'
     }
@@ -293,6 +338,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '100–112',
     parts: {
+      timbaleHigh: '-------------xx-',
       open: '--x---x---x---x-',
       snare: '---x--x----x--x-',
       kick: 'X---X---X---X---'
@@ -301,6 +347,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall',
     style: 'Dancehall',
+    group: 'Basics',
     bpm: '90–110',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-',
@@ -311,6 +358,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, bounce',
     style: 'Dancehall',
+    group: 'Basics',
     bpm: '90–110',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-',
@@ -321,6 +369,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, claps',
     style: 'Dancehall',
+    group: 'Basics',
     bpm: '95–110',
     parts: {
       clap: 'x--x--x-x--x--x-',
@@ -330,6 +379,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, digital',
     style: 'Dancehall',
+    group: 'Digital and old school',
     bpm: '85–100',
     parts: {
       hat: 'xoxoxoxoxoxoxoxo',
@@ -340,6 +390,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, with a fill',
     style: 'Dancehall',
+    group: 'Fills and sections',
     bpm: '90–110',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
@@ -598,7 +649,7 @@ export const PATTERNS: Pattern[] = [
     style: 'R&B',
     bpm: '110–130',
     parts: {
-      shaker: 'x-x-x-x-x-x-x-x-',
+      tambourine: 'x-x-x-x-x-x-x-x-',
       hat: 'x-x-x-x-x-x-x-x-',
       snare: 'X---X---X---X---',
       kick: 'X-----x-X-----x-'
@@ -737,6 +788,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Techno',
     bpm: '120–130',
     parts: {
+      claves: 'x--x--x---x-x---',
       cowbell: '--x-x---x-x-x---',
       hat: 'x-xxx-xxx-xxx-xx',
       snare: '----X-------X---',
@@ -843,6 +895,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Afro',
     bpm: '100–125',
     parts: {
+      claves: 'x--x--x---x-x---',
       shaker: 'x-x-x-x-x-x-x-x-',
       hat: 'xxxxxxxxxxxxxxxx',
       snare: '----o--x-o--x--o',
@@ -865,6 +918,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Afro',
     bpm: '118–124',
     parts: {
+      tambourine: '--x---x---x---x-',
       shaker: 'xoxoxoxoxoxoxoxo',
       congaHigh: '--x--x----x--x--',
       congaLow: '------x-------x-',
@@ -888,6 +942,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Caribbean',
     bpm: '90–120',
     parts: {
+      claves: 'x--x--x-x--x--x-',
       hat: 'x-x-x-x-x-x-x-x-',
       kick: 'X--x--x-X--x--x-'
     }
@@ -956,6 +1011,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, heavy',
     style: 'Dancehall',
+    group: 'Basics',
     bpm: '90–110',
     parts: {
       hat: 'xoxoxoxoxoxoxoxo',
@@ -966,6 +1022,7 @@ export const PATTERNS: Pattern[] = [
   {
     name: 'Dancehall, sparse',
     style: 'Dancehall',
+    group: 'Basics',
     bpm: '90–110',
     parts: {
       clap: '------X-------X-',
@@ -1012,7 +1069,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '115–125',
     parts: {
       hat: 'xxxxxxxxxxxxxxxx',
-      tomHigh: '------x-------x-',
+      timbaleHigh: '------x-------x-',
       snare: '---x--x----x--x-',
       kick: 'X---X---X---X---'
     }
@@ -1023,7 +1080,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '85–110',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-',
-      rim: 'x--x--x---x-x---',
+      claves: 'x--x--x---x-x---',
       kick: '------x-------x-'
     }
   },
@@ -1033,7 +1090,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '85–110',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-',
-      rim: 'x--x---x--x-x---',
+      claves: 'x--x---x--x-x---',
       kick: '------x-------x-'
     }
   },
@@ -1042,8 +1099,11 @@ export const PATTERNS: Pattern[] = [
     style: 'Latin',
     bpm: '85–110',
     parts: {
+      bongoLow: '--------------x-',
+      bongoHigh: 'x-o-x-o-x-o-x---',
+      cowbell: 'x---x-x-x---x-x-',
       ride: 'x-x-xx-xx-xx-x-x',
-      rim: '--x-x---x--x--x-',
+      claves: '--x-x---x--x--x-',
       congaHigh: '--x-------x-----',
       congaLow: '------xx------xx',
       kick: '---x--x----x--x-'
@@ -1064,6 +1124,8 @@ export const PATTERNS: Pattern[] = [
     style: 'Latin',
     bpm: '90–105',
     parts: {
+      agogoLow: '--x---x-x-----x-',
+      agogoHigh: 'x---x-----x-x---',
       shaker: 'XooXXooXXooXXooX',
       rim: 'x-x-xx-x-x-x-xx-',
       kick: 'X--xX--xX--xX--x'
@@ -1074,7 +1136,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Latin',
     bpm: '85–100',
     parts: {
-      shaker: 'x-xxx-xxx-xxx-xx',
+      guiro: 'x-xxx-xxx-xxx-xx',
       rim: '----X-------X---',
       kick: 'X-------X-------'
     }
@@ -1094,6 +1156,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Rock',
     bpm: '115–130',
     parts: {
+      cowbell: 'x---x---x---x---',
       open: '--x---x---x---x-',
       snare: '----X-------X---',
       kick: 'X---X---X---X---'
@@ -1175,6 +1238,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Funk',
     bpm: '90–105',
     parts: {
+      congaLow: '------x-------xx',
       cowbell: 'x-x-x-x-x-x-x-x-',
       congaHigh: 'x-xx-xx-x-xx-xx-',
       snare: '----X-------X---',
@@ -1311,6 +1375,7 @@ export const PATTERNS: Pattern[] = [
     style: 'Trap',
     bpm: '140–150',
     parts: {
+      claves: '---x-----x----x-------x--x------',
       open: '------x-----------------------x-',
       hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
       clap: '--------X---------------X-------',
@@ -1445,6 +1510,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '90–98',
     parts: {
+      timbaleHigh: '--------------x-',
       hat: 'XoxoXoxoXoxoXoxo',
       snare: '---X--x----X--x-',
       kick: 'X---X---X---X---'
@@ -1457,7 +1523,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '92–98',
     parts: {
       hat: 'x-x-x-x-x-x-x-x-',
-      tomHigh: '--------------x-',
+      timbaleHigh: '--------------x-',
       clap: '---X-------X----',
       snare: '---x--x----x--x-',
       kick: 'X---X---X---X---'
@@ -1492,8 +1558,8 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '80–92',
     parts: {
-      shaker: 'xoxoxoxoxoxoxoxo',
-      congaHigh: '------x-------x-',
+      cabasa: 'xoxoxoxoxoxoxoxo',
+      bongoHigh: '------x-------x-',
       rim: '---x--x----x--x-',
       kick: 'X-------X-------'
     }
@@ -1551,6 +1617,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '95–105',
     parts: {
+      timbaleHigh: '------x-------x-',
       open: '--x---x---x---x-',
       hat: 'xxxxxxxxxxxxxxxx',
       clap: '---X--X----X--X-',
@@ -1599,7 +1666,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '95–100',
     parts: {
       cowbell: 'x-x-x-x-x-x-x-x-',
-      shaker: 'x-xxx-xxx-xxx-xx',
+      guiro: 'x-xxx-xxx-xxx-xx',
       snare: '---x--x----x--x-',
       kick: 'X---X---X---X---'
     }
@@ -1610,7 +1677,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '88–98',
     parts: {
-      shaker: 'x-xxx-xxx-xxx-xx',
+      guiro: 'x-xxx-xxx-xxx-xx',
       snare: '---x--x----x--x-',
       kick: 'X---X---X---X---'
     }
@@ -1621,8 +1688,8 @@ export const PATTERNS: Pattern[] = [
     group: 'Scenes',
     bpm: '85–95',
     parts: {
-      shaker: 'x-x-x-x-x-x-x-x-',
-      congaHigh: 'x-x-xx-xx-x-xx-x',
+      guiro: 'x-x-x-x-x-x-x-x-',
+      bongoHigh: 'x-x-xx-xx-x-xx-x',
       rim: '---x--x----x--x-',
       kick: 'X-------X-------'
     }
@@ -1666,7 +1733,7 @@ export const PATTERNS: Pattern[] = [
     bpm: '115–130',
     parts: {
       hat: 'xxxxxxxxxxxxxxxx',
-      tomHigh: '------x-------x-',
+      timbaleHigh: '------x-------x-',
       snare: '---X--X----X--X-',
       kick: 'X--xX--xX--xX--x'
     }
@@ -1855,6 +1922,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Hats and percussion',
     bpm: '88–100',
     parts: {
+      congaMute: '----x-------x---',
       shaker: 'x-x-x-x-x-x-x-x-',
       congaHigh: '--x-------x--x--',
       congaLow: '------xx------x-',
@@ -2073,6 +2141,7 @@ export const PATTERNS: Pattern[] = [
     group: 'Electro',
     bpm: '125–135',
     parts: {
+      claves: '---x--x----x-x--',
       open: '--------------x-',
       hat: '--x---x---x---x-',
       snare: '----X-------X---',
@@ -2328,6 +2397,7 @@ export const PATTERNS: Pattern[] = [
     group: 'House',
     bpm: '118–126',
     parts: {
+      tambourine: '----x-------x---',
       open: '--x---x---x---x-',
       hat: 'x-xxx-xxx-xxx-xx',
       clap: '---oX------oX---',
@@ -2340,6 +2410,7 @@ export const PATTERNS: Pattern[] = [
     group: 'House',
     bpm: '118–126',
     parts: {
+      congaMute: 'x---------x-----',
       open: '--x---x---x---x-',
       congaHigh: '--x--x----x--x--',
       congaLow: '-------x-------x',
@@ -2371,37 +2442,881 @@ export const PATTERNS: Pattern[] = [
       clap: '---oX------oX---',
       kick: 'X---X---X---X--x'
     }
+  },
+  {
+    name: 'Dancehall, modern',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '95–105',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      rim: '---x-------x----',
+      clap: '------X-------X-',
+      kick: 'X-------X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, melodic',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '90–100',
+    parts: {
+      open: '------x---------',
+      hat: 'x-x-x-x-x-x-x-3-',
+      rim: '---x--x----x--x-',
+      kick: 'X-------X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, summer',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '98–108',
+    parts: {
+      shaker: 'xoxoxoxoxoxoxoxo',
+      clap: '---x--x----x--x-',
+      kick: 'X--x----X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, slow wine',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '85–95',
+    parts: {
+      shaker: 'o-x-o-x-o-x-o-x-',
+      congaHigh: '------x-------x-',
+      rim: '---x--x----x--x-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, street',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '95–105',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '---X--X----X--X-',
+      kick: 'X-----x-X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, uptempo',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '105–115',
+    parts: {
+      hat: 'xxxxxxxxxxxxxxxx',
+      snare: '---x--x----x--x-',
+      kick: 'X--x--x-X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, afro',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '100–108',
+    parts: {
+      shaker: 'xoxoxoxoxoxoxoxo',
+      rim: '---x--x----x--x-',
+      clap: '----x-------x---',
+      kick: 'X-----x-X---x---'
+    }
+  },
+  {
+    name: 'Dancehall, pop',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '95–105',
+    parts: {
+      hat: '--x---x---x---x-',
+      clap: '----X-------X---',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, moody',
+    style: 'Dancehall',
+    group: 'Modern',
+    bpm: '88–98',
+    parts: {
+      hat: 'x---x---x---x-x-',
+      rim: '---x--x----x--x-',
+      kick: 'X---------x-----'
+    }
+  },
+  {
+    name: 'Trap dancehall',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '95–105',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-3-x-x-x-x-x-3-x-4-',
+      snare: '---x--x----x--x----x--x----x--x-',
+      kick: 'X-------X--x----X-------X-x-----'
+    }
+  },
+  {
+    name: 'Trap dancehall, dark',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '92–102',
+    parts: {
+      open: '--------------x---------------x-',
+      hat: 'x-x-x-3-x-x-x-x-x-x-x-x-3-x-x-x-',
+      rim: '---x--x----x--x----x--x----x--x-',
+      kick: 'X-----x-X-------X-----x-X--x--x-'
+    }
+  },
+  {
+    name: 'Trap dancehall, bouncy',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '95–105',
+    parts: {
+      hat: 'xxx-x-x-xxx-x-x-xxx-x-x-x-3-4-x-',
+      clap: '------X-------X-------X-------X-',
+      kick: 'X--x----X--x----X--x----X--x--x-'
+    }
+  },
+  {
+    name: 'Trap dancehall, sparse',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '90–100',
+    parts: {
+      hat: '--x---x---x---x---x---x---x---x-',
+      clap: '---x--x----x--x----x--x----x--x-',
+      kick: 'X---------------X-------x-------'
+    }
+  },
+  {
+    name: 'Trap dancehall, heavy 808',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '95–105',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
+      snare: '---X--X----X--X----X--X----X--X-',
+      kick: 'X--x--x-X-----x-X--x--x-X--x-x--'
+    }
+  },
+  {
+    name: 'Trap dancehall, triplet hats',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '95–105',
+    parts: {
+      hat: 'x-3-x-3-x-3-x-3-x-3-x-3-x-4-x-33',
+      snare: '---x--x----x--x----x--x----x--x-',
+      kick: 'X-------X-----x-X-----x-X-------'
+    }
+  },
+  {
+    name: 'Trap dancehall, fast hats',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '95–105',
+    parts: {
+      hat: 'xxxxxxxxxxxxxx3-xxxxxxxxxxxx4-33',
+      clap: '---x--x----x--x----x--x----x--x-',
+      kick: 'X-------X--x----X--x----X-------'
+    }
+  },
+  {
+    name: 'Trap dancehall, rim',
+    style: 'Dancehall',
+    group: 'Trap dancehall',
+    bpm: '92–102',
+    parts: {
+      hat: 'x-x-x-x-x-x-3-x-x-x-x-x-x-x-x-4-',
+      rim: '---x--x--x-x--x----x--x----x-xx-',
+      kick: 'X-------X-------X-----x-X-------'
+    }
+  },
+  {
+    name: 'Dancehall, computer',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '85–100',
+    parts: {
+      cowbell: 'x---x---x---x---',
+      hat: 'xxxxxxxxxxxxxxxx',
+      snare: '------X-------X-',
+      kick: 'X--x----X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, 80s',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '80–95',
+    parts: {
+      hat: 'xoxoxoxoxoxoxoxo',
+      clap: '----X-------X---',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, 90s',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '95–110',
+    parts: {
+      hat: '--x---x---x---x-',
+      snare: '---x--x----x--x-',
+      kick: 'X--x----X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, 90s ragga',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '95–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '------X-------X-',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, 2000s',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '100–115',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      tomLow: '----------x--x--',
+      clap: '---x--x----x--x-',
+      kick: 'X-----x-X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, hand claps',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '100–115',
+    parts: {
+      tambourine: '--x---x---x---x-',
+      clap: 'x--x--x-x--x--xx',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, rolling snare',
+    style: 'Dancehall',
+    group: 'Digital and old school',
+    bpm: '95–110',
+    parts: {
+      snare: 'X--xo-X-o--xo-X-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Bashment',
+    style: 'Dancehall',
+    group: 'Hard',
+    bpm: '100–110',
+    parts: {
+      hat: 'xxxxxxxxxxxxxxxx',
+      clap: '------X-------X-',
+      snare: '---x-------x----',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, hard',
+    style: 'Dancehall',
+    group: 'Hard',
+    bpm: '98–108',
+    parts: {
+      hat: 'xoxoxoxoxoxoxoxo',
+      snare: '---X--X----X--X-',
+      kick: 'X--x----X-xx----'
+    }
+  },
+  {
+    name: 'Dancehall, clash',
+    style: 'Dancehall',
+    group: 'Hard',
+    bpm: '98–108',
+    parts: {
+      tomLow: 'x--x--x-x--x--x-',
+      snare: '------X-------X-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, stomp',
+    style: 'Dancehall',
+    group: 'Hard',
+    bpm: '100–110',
+    parts: {
+      open: '--x---x---x---x-',
+      clap: '---X--X----X--X-',
+      kick: 'X--x--x-X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, timbales',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      timbaleHigh: '---x--x----x--x-',
+      clap: '------------X---',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, congas',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      congaHigh: '--x--x----x--x--',
+      congaLow: '-------x-------x',
+      rim: '---x--x----x--x-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, cowbell',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      cowbell: 'x--x--x-x--x--x-',
+      snare: '------X-------X-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, claves',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      shaker: 'x-x-x-x-x-x-x-x-',
+      claves: '---x--x----x--x-',
+      kick: 'X--x----X--x----'
+    }
+  },
+  {
+    name: 'Dancehall, shaker',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      shaker: 'XoxoXoxoXoxoXoxo',
+      rim: '---x--x----x--x-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, tambourine',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      tambourine: '--x---x---x---x-',
+      snare: '---x--x----x--x-',
+      kick: 'X-----x-X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, rimshot',
+    style: 'Dancehall',
+    group: 'Percussion',
+    bpm: '90–110',
+    parts: {
+      hat: '--x---x---x---x-',
+      rim: '---x--x--x-x--x-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, pushed kick',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '---x--x----x--x-',
+      kick: 'X-----x-X---x---'
+    }
+  },
+  {
+    name: 'Dancehall, double kick',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '---x--x----x--x-',
+      kick: 'X-x-----X-x-----'
+    }
+  },
+  {
+    name: 'Dancehall, late snare',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '---x---x---x---x',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, half-time',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '--------X-------',
+      kick: 'X--x--x---x--x--'
+    }
+  },
+  {
+    name: 'Dancehall, four on the floor',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '100–115',
+    parts: {
+      hat: '--x---x---x---x-',
+      snare: '------X-------X-',
+      kick: 'X---X---X---X---'
+    }
+  },
+  {
+    name: 'Dancehall, ghost snares',
+    style: 'Dancehall',
+    group: 'Kick and snare',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: 'o--Xo-X-o--Xo-X-',
+      kick: 'X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, intro',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      rim: '---x--x----x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, break',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
+      snare: '---x--x----x--x----x--x----x--x-',
+      kick: 'X---------------X---------------'
+    }
+  },
+  {
+    name: 'Dancehall, build',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      snare: 'x---x---x---x---x-x-x-x-xxxx2222',
+      kick: 'X-------X-------X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, drop',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      crash: 'X-------------------------------',
+      hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
+      snare: '---X--X----X--X----X--X----X--X-',
+      kick: 'X--x----X-------X--x----X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, timbale fill',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
+      timbaleHigh: '------------------------x-xx-x--',
+      timbaleLow: '------------------------------xx',
+      snare: '---x--x----x--x----x--x---------',
+      kick: 'X-------X-------X-------X-------'
+    }
+  },
+  {
+    name: 'Dancehall, switch-up',
+    style: 'Dancehall',
+    group: 'Fills and sections',
+    bpm: '90–110',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-',
+      snare: '---x--x----x--x-------X-------X-',
+      kick: 'X-------X-------X--x----X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, womp',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: '--x---x---x---x-',
+      tomLow: '---x-------x----',
+      clap: '------X-------X-',
+      kick: 'X-x---x-X-x---x-'
+    }
+  },
+  {
+    name: 'Dancehall, womp, slow',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '85–95',
+    parts: {
+      tomLow: '------x-------x-',
+      rim: '---x--x----x--x-',
+      kick: 'X-x-----X-x-----'
+    }
+  },
+  {
+    name: 'Dancehall, womp, double',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      clap: '----X-------X---',
+      kick: 'Xx----x-Xx----x-'
+    }
+  },
+  {
+    name: 'Dancehall, womp, half-time',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '--------X-------',
+      kick: 'X-x-------x-x---'
+    }
+  },
+  {
+    name: 'Dancehall, womp, two bars',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      tomLow: '---x-------x-------x-------x--x-',
+      clap: '------X-------X-------X-------X-',
+      kick: 'X-x---x-X-x---x-X-x---x-X-xx-xx-'
+    }
+  },
+  {
+    name: 'Dancehall, 90s hardcore',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      tomLow: '--------------x-',
+      clap: '----X-------X---',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, 90s hardcore, bare',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      clap: '----X-------X---',
+      kick: 'X--x--x-X--x--x-'
+    }
+  },
+  {
+    name: 'Dancehall, 90s hardcore, rim',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      rim: '--x-x--x--x-x--x',
+      snare: '----X-------X---',
+      kick: 'X--x--x-X-----x-'
+    }
+  },
+  {
+    name: 'Dancehall, 90s hip hop',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '88–98',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      snare: '----X-------X---',
+      kick: 'X--x--x---x--x--'
+    }
+  },
+  {
+    name: 'Dancehall, tom boom',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      tomLow: '---x--x----x--x-',
+      clap: '----X-------X---',
+      kick: 'X-x-----X-x-----'
+    }
+  },
+  {
+    name: 'Dancehall, sound system',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      open: '--------------x-',
+      snare: '---x--x----x--x-',
+      kick: 'X-----x-X-x---x-'
+    }
+  },
+  {
+    name: 'Dancehall, heavy bottom',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: '--x---x---x---x-',
+      clap: '------X-------X-',
+      kick: 'X-xx--x-X-xx--x-'
+    }
+  },
+  {
+    name: 'Dancehall, one two',
+    style: 'Dancehall',
+    group: '90s hardcore',
+    bpm: '92–104',
+    parts: {
+      hat: 'x-x-x-x-x-x-x-x-',
+      clap: '------X-------X-',
+      kick: 'X---x---X---x-x-'
+    }
   }
 ]
 
 const SIXTEENTH = PPQ / 4
 
 /** What plays a part on a kit that lacks it. */
-const STAND_INS: Partial<Record<Role, Role>> = { clap: 'snare', rim: 'snare', crash: 'open', ride: 'hat', open: 'hat', shaker: 'hat', cowbell: 'rim', congaHigh: 'tomHigh', congaLow: 'tomLow' }
+const STAND_INS: Partial<Record<Role, Role>> = {
+  clap: 'snare', rim: 'snare', crash: 'open', ride: 'hat', open: 'hat', shaker: 'hat', cowbell: 'rim', congaHigh: 'tomHigh', congaLow: 'tomLow',
+  congaMute: 'congaHigh', bongoHigh: 'congaHigh', bongoLow: 'congaLow', timbaleHigh: 'tomHigh', timbaleLow: 'tomLow', claves: 'rim',
+  agogoHigh: 'cowbell', agogoLow: 'cowbell', cabasa: 'shaker', guiro: 'shaker', tambourine: 'shaker'
+}
+
+/** The note that plays a part on a kit: its own, or that of the nearest thing the kit has. */
+function pitchOf(kit: Kit, role: Role): number | undefined {
+  for (let each: Role | undefined = role, tries = 0; each && tries < 4; each = STAND_INS[each], tries++) {
+    const pitch = kit.roles[each]
+    if (pitch !== undefined) return pitch
+  }
+  return undefined
+}
+
+// ── From a pattern to a part ─────────────────────────────────────────────
+
+/** How a style ends a phrase and builds from one to the next. */
+type Family = 'rolls' | 'toms' | 'timbales' | 'machine'
+const FAMILIES: Record<string, Family> = {
+  Trap: 'rolls', Drill: 'rolls', 'Hip hop': 'rolls', 'R&B': 'rolls', 'Bass music': 'rolls',
+  Reggaeton: 'timbales', Dancehall: 'timbales', Latin: 'timbales', Caribbean: 'timbales', Afro: 'timbales', 'Dancehall/Trap dancehall': 'rolls',
+  House: 'machine', Techno: 'machine', Garage: 'machine', Detroit: 'machine'
+}
+
+/** How late the steps between the half-beats are played, from 0 to 1 of the sequencer's swing, by style and by pattern. */
+export const SWING: Record<string, number> = {
+  'Hip hop': 0.16, 'R&B': 0.14, Garage: 0.38, Funk: 0.12, House: 0.1, Reggae: 0.18, 'Boom bap': 0.34, 'Boom bap, heavy': 0.34, 'Boom bap, two bars': 0.34,
+  'Lo-fi': 0.4, 'New jack swing': 0.5, 'Go-go': 0.4, 'Detroit house, raw': 0.24, Beatdown: 0.3, 'Detroit techno, shuffled hats': 0.2, 'G-funk': 0.24, Grime: 0
+}
+
+/** Parts that run through the bar, and so are played with the beat leaning on them. */
+const RUNNING = new Set<Role>(['hat', 'shaker', 'ride', 'cabasa', 'guiro', 'tambourine'])
+/** Parts a fill plays over. */
+const TOPS: Role[] = ['hat', 'open', 'shaker', 'ride', 'cabasa', 'guiro', 'tambourine', 'rim', 'cowbell']
+/** A pattern that is already an event (a fill, a build, a break) is played as written. */
+const AS_WRITTEN = /fill|build|drop|roll|rush|break|intro|come in|switch|drops out/i
+
+const BAR = 16
+
+/** Random numbers that are the same every time for the same word, so a pattern always comes out the same. */
+export function seeded(word: string): () => number {
+  let state = 2166136261
+  for (let i = 0; i < word.length; i++) state = Math.imul(state ^ word.charCodeAt(i), 16777619)
+  return () => {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
 
 /**
- * The notes that play a pattern on a kit for `length` ticks. A part the kit
- * lacks is played by the nearest thing it has (a clap by the snare, a
- * shaker by the hat) or left out; where that would put two hits on one
- * drum at once, the part written for that drum keeps the step.
+ * A pattern laid out over `steps` sixteenths, a line to a part, and made to
+ * go somewhere. Over four bars the second bar answers the first with a small
+ * change and the fourth ends in a fill; over eight the second four are
+ * fuller (a cymbal or a bell joins, a crash marks the turn) and end in a
+ * bigger fill. What a fill and a lift are depends on the style. Shorter
+ * than two bars, the pattern is just repeated.
+ */
+function arrange(pattern: Pattern, steps: number): Map<Role, string[]> {
+  const grid = new Map<Role, string[]>()
+  for (const [role, line] of Object.entries(pattern.parts) as [Role, string][]) grid.set(role, Array.from({ length: steps }, (_, step) => line[step % line.length]))
+  const bars = Math.floor(steps / BAR)
+  if (bars < 2 || AS_WRITTEN.test(pattern.name)) return grid
+
+  const random = seeded(pattern.name)
+  const family = FAMILIES[`${pattern.style}/${pattern.group}`] ?? FAMILIES[pattern.style] ?? 'toms'
+  const line = (role: Role): string[] => {
+    if (!grid.has(role)) grid.set(role, Array.from({ length: steps }, () => '-'))
+    return grid.get(role)!
+  }
+  const put = (role: Role, step: number, mark: string): void => {
+    if (step < steps) line(role)[step] = mark
+  }
+  const clear = (roles: Role[], from: number, to: number): void => {
+    for (const role of roles) if (grid.has(role)) for (let step = from; step < to && step < steps; step++) grid.get(role)![step] = '-'
+  }
+  const has = (role: Role): boolean => role in pattern.parts
+  const oneBar = Object.values(pattern.parts).every((each) => each!.length <= BAR)
+  // The backbeat's voice, for answers and fills: whichever of these the pattern is built on.
+  const back: Role = has('snare') ? 'snare' : has('clap') ? 'clap' : has('rim') ? 'rim' : 'snare'
+
+  // The answer: one small change, the same one each time it comes round.
+  const answers: ((bar: number) => void)[] = [
+    (bar) => {
+      const free = [7, 10, 11, 14, 15].filter((step) => line('kick')[bar * BAR + step] === '-')
+      if (free.length) put('kick', bar * BAR + free[Math.floor(random() * free.length)], 'x')
+    },
+    (bar) => {
+      const free = [7, 9, 15].filter((step) => line(back)[bar * BAR + step] === '-')
+      if (free.length) put(back, bar * BAR + free[Math.floor(random() * free.length)], 'o')
+    },
+    (bar) => {
+      if (has('hat')) put('hat', bar * BAR + 14, '-')
+      put('open', bar * BAR + 14, 'x')
+    }
+  ]
+  const answer = answers[Math.floor(random() * answers.length)]
+  const spot = Math.floor(random() * 3)
+
+  for (let bar = 0; bar < bars; bar++) {
+    const at = bar * BAR
+    const place = bar % 4
+    const second = Math.floor(bar / 4) % 2 === 1
+    const last = bar === bars - 1
+
+    // The second four bars are fuller.
+    if (second) {
+      if (place === 0) put('crash', at, 'X')
+      if (family === 'toms' && has('hat') && !has('ride')) {
+        for (let step = at; step < at + BAR; step++) {
+          put('ride', step, line('hat')[step])
+          put('hat', step, '-')
+        }
+      } else if (family === 'timbales' && !has('cowbell')) for (const step of [0, 4, 8, 12]) put('cowbell', at + step, step === 0 ? 'x' : 'o')
+      else if (family === 'machine' && !has('ride')) for (const step of [2, 6, 10, 14]) put(has('open') ? 'ride' : 'open', at + step, 'x')
+      else if (family === 'rolls' && has('hat') && place % 2 === 0 && line('hat')[at + 6] === 'x') put('hat', at + 6, random() < 0.5 ? '2' : '3')
+    }
+
+    // Bars two and four answer bars one and three, where the pattern does not already.
+    if (oneBar && place % 2 === 1) answer(bar)
+
+    // A phrase ends in a fill: a small one after four bars, a bigger one after eight, and at the end of the clip the one it has earned.
+    const ends = place === 3 || (last && bars >= 2 && place === 1)
+    if (!ends) continue
+    const big = second && place === 3
+    const from = at + (big ? 8 : 12)
+    if (family === 'rolls') {
+      // The hats break into rolls, and a big one hands over to the snare.
+      const shapes = [['x', '3', 'x', '4'], ['2', 'x', '3', '3'], ['x', 'x', '2', '4']]
+      shapes[spot].forEach((mark, i) => put('hat', at + 12 + i, mark))
+      if (big) {
+        clear(['hat', 'open', 'kick'], at + 12, at + BAR)
+        ;['x', '2', '3', '4'].forEach((mark, i) => put(back === 'clap' ? 'snare' : back, at + 12 + i, mark))
+        put('open', at + 10, 'x')
+      }
+    } else if (family === 'timbales') {
+      // Timbales over the top; the kick and the snare keep the dance going underneath.
+      const shapes: [Role, number, string][][] = [
+        [['timbaleHigh', 13, 'x'], ['timbaleHigh', 14, 'x'], ['timbaleLow', 15, 'X']],
+        [['timbaleHigh', 12, 'x'], ['timbaleHigh', 14, '2'], ['timbaleLow', 15, 'X']],
+        [['timbaleHigh', 13, '2'], ['timbaleLow', 14, 'x'], ['timbaleLow', 15, 'X']]
+      ]
+      if (big) for (const [role, step, mark] of [['timbaleHigh', 8, 'x'], ['timbaleHigh', 10, 'x'], ['timbaleHigh', 11, 'x']] as [Role, number, string][]) put(role, at + step, mark)
+      for (const [role, step, mark] of shapes[spot]) put(role, at + step, mark)
+    } else if (family === 'machine') {
+      // The kick steps out and the clap or snare rushes back in.
+      clear(['kick'], from, at + BAR)
+      const shapes = [['-', '-', 'x', '2'], ['-', 'x', 'x', '2'], ['x', '-', '2', '4']]
+      shapes[spot].forEach((mark, i) => mark !== '-' && put(back, at + 12 + i, mark))
+      if (big) put(back, at + 10, 'o')
+    } else {
+      // Round the kit: the snare, then down the toms.
+      clear([...TOPS, 'snare', 'clap'], from, at + BAR)
+      const shapes: [Role, string][][] = [
+        [['snare', 'x'], ['snare', 'x'], ['tomHigh', 'x'], ['tomLow', 'X']],
+        [['snare', 'x'], ['-' as Role, '-'], ['snare', '2'], ['tomLow', 'X']],
+        [['snare', 'o'], ['snare', 'x'], ['snare', 'x'], ['snare', 'X']]
+      ]
+      shapes[spot].forEach(([role, mark], i) => mark !== '-' && put(role, at + 12 + i, mark))
+      if (big) for (const [step, mark] of [[8, 'x'], [10, 'x'], [11, 'o']] as [number, string][]) put('snare', at + step, mark)
+    }
+  }
+  return grid
+}
+
+/**
+ * The notes that play a pattern on a kit for `length` ticks, as a drummer
+ * would play it: laid out to go somewhere (see `arrange`), the running parts
+ * leaning on the beat, each hit a shade louder or softer than the last, and
+ * swung where the style is. A part the kit lacks is played by the nearest
+ * thing it has (a clap by the snare, a shaker by the hat) or left out;
+ * where that would put two hits on one drum at once, the part written for
+ * that drum keeps the step. The same pattern always comes out the same.
  */
 export function patternNotes(pattern: Pattern, kit: Kit, length: number): Note[] {
-  const parts = Object.entries(pattern.parts) as [Role, string][]
+  const steps = Math.ceil(length / SIXTEENTH)
+  const parts = [...arrange(pattern, steps)]
   // Parts the kit has of its own first, so that a stand-in gives way to them.
   parts.sort(([a], [b]) => Number(kit.roles[a] === undefined) - Number(kit.roles[b] === undefined))
+  const random = seeded(`${pattern.name} feel`)
+  const late = Math.round((SWING[pattern.name] ?? SWING[pattern.style] ?? 0) * SIXTEENTH * 0.5)
   const taken = new Set<string>()
   const notes: Note[] = []
   for (const [role, line] of parts) {
-    const stand = STAND_INS[role]
-    const pitch = kit.roles[role] ?? (stand ? (kit.roles[stand] ?? (STAND_INS[stand] ? kit.roles[STAND_INS[stand]!] : undefined)) : undefined)
+    const pitch = pitchOf(kit, role)
     if (pitch === undefined) continue
-    for (let step = 0; step * SIXTEENTH < length; step++) {
-      const mark = line[step % line.length]
+    // A running part written all at one level is given the beat's shape: strongest on the beat, lightest between the half-beats.
+    const shaped = RUNNING.has(role) && !/[Xo]/.test(pattern.parts[role] ?? '')
+    for (let step = 0; step < steps; step++) {
+      const mark = line[step]
       if (mark === '-' || taken.has(`${pitch}:${step}`)) continue
       taken.add(`${pitch}:${step}`)
-      const start = step * SIXTEENTH
-      if (mark >= '2' && mark <= '4') notes.push(...hits(pitch, start, SIXTEENTH, NORMAL, Number(mark)))
-      else notes.push(...hits(pitch, start, SIXTEENTH, mark === 'X' ? ACCENT : mark === 'o' ? GHOST : NORMAL))
+      const level = mark === 'X' ? ACCENT : mark === 'o' ? GHOST : shaped ? [0.86, 0.56, 0.7, 0.56][step % 4] : NORMAL
+      const velocity = Math.min(1, level * (0.94 + random() * 0.12))
+      if (mark >= '2' && mark <= '4') notes.push(...hits(pitch, step * SIXTEENTH, SIXTEENTH, velocity, Number(mark)))
+      else notes.push(...hits(pitch, step * SIXTEENTH + (step % 2 === 1 ? late : 0), SIXTEENTH, velocity))
     }
   }
   return notes.filter((note) => note.start < length)

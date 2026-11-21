@@ -2054,12 +2054,14 @@
   font: var(--weight-normal) var(--text-md) / 1.4 var(--font-ui);
 }
 
-.studio .ss-picker {
+.studio .ss-picker,
+.studio .pr-picker {
   flex: none;
   width: 168px;
 }
 
-.studio .ss-picker .btn {
+.studio .ss-picker .btn,
+.studio .pr-picker .btn {
   width: 100%;
 }
 

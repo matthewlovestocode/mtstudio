@@ -27,6 +27,10 @@ export interface Layout {
   inputDevice: string | null
   /** The step sequencer's grid: how many steps to a beat. */
   stepDivision: number
+  /** Whether starting from a pattern makes a shorter clip eight bars long, where there is room, so the pattern can run its course. */
+  patternGrow: boolean
+  /** Whether starting from a pattern also puts the track on the drum kit the pattern's style belongs on. */
+  patternKits: boolean
   /** In the piano roll, notes drawn or moved go only to notes of the key. */
   scaleLock: boolean
   /** In the piano roll, only the key's notes have rows. */
@@ -63,7 +67,7 @@ export const DOCK = { min: 140, default: 300 }
 export const ARRANGE_MIN = 120
 
 const KEY = 'studio.layout'
-const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null, stepDivision: 4, scaleLock: false, scaleFold: false, scaleKeys: false, chordBars: 1, chordSevenths: false }
+const DEFAULTS: Layout = { sideOpen: true, sideWidth: SIDE.default, dockOpen: true, dockHeight: DOCK.default, dockTab: 'editor', snap: PPQ, globals: true, rollZoom: ROLL_ZOOM.default, browserOpen: true, browserWidth: BROWSER.default, audition: true, favourites: [], inputDevice: null, stepDivision: 4, patternKits: true, patternGrow: true, scaleLock: false, scaleFold: false, scaleKeys: false, chordBars: 1, chordSevenths: false }
 
 function stored(): Layout {
   try {

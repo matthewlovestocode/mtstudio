@@ -126,9 +126,18 @@ transport bar saying which engine is in use.
   the editor's bar goes to the piano roll and back. It reads and writes the
   clip's notes and nothing else, so it works with any kit (rows follow
   General MIDI's drum map, or the built-in drum machine's twelve sounds).
-  It has about two hundred rhythms to start from, in twenty styles,
+  It has about two hundred and fifty rhythms to start from, in twenty styles,
   written as lines of sixteenths (`PATTERNS`), with parts for cowbell,
-  shaker and congas that fall back to what a smaller kit has;
+  shaker, congas, bongos, timbales, claves, agogo, cabasa, güiro and
+  tambourine that fall back to what a smaller kit has. Each style names
+  the SoundFont drum kit it belongs on (`kitNameFor`), and starting from
+  a pattern moves the track to it unless that is switched off in the
+  sequencer's kit chooser. A pattern is not just repeated: `patternNotes`
+  lays it out over the clip so that it goes somewhere (bars answer one
+  another, a fill ends every four, the second four of eight are fuller),
+  shapes the loudness of the running parts and swings the styles that
+  swing, the same way every time for the same pattern; and choosing one
+  makes a short clip eight bars long where there is room;
   Vary, Fill and Humanise; rolls of two to four in a step; accents and
   ghost notes; and swing, which is read from the notes and written to
   them, so nothing but the clip holds it. It works from the keyboard.
@@ -140,6 +149,22 @@ Left over:
 - No settings window (devices, buffer size, which engine); no browser panel
   for instruments, plugins and files
 - The mixer has no sends, effect slots or master fader
+
+### Bass lines (`src/renderer/src/bass.ts`)
+
+- The piano roll's "Start from a bass line…" offers lines in the styles of
+  the drum patterns (trap, drill, dancehall, reggaeton and reggae to begin
+  with). A line is written against a chord (`1` root, `5` fifth, `8`
+  octave…), so `bassNotes` puts it in the key, over the chord the other
+  tracks play in each bar, or over a round of the key's chords that suits
+  the style where they play none. Every fourth bar leans into the next,
+  and the second four of eight reach up an octave.
+- Over drums it locks to the kick: lines marked `follow` are rebuilt with
+  a note on every kick, and the rest have notes a sixteenth from a kick
+  moved onto it. The kick is read from the drum clips when the line is
+  chosen; it does not track later edits to the drums.
+- Left: glide between notes for 808 slides; chord and synth parts; an
+  instrument per style, as the drum kits have.
 
 ### Instruments and sound content
 

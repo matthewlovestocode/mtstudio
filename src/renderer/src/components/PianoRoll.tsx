@@ -4,14 +4,17 @@ import { keySegments, segmentAt } from '@shared/keymap'
 import { inKey, isRoot, nearestInKey, noteName, type Key } from '@shared/theory'
 import { timeMap } from '@shared/timemap'
 import { TextField } from './controls/fields'
+import { BASS_GROUPS, BASS_LINES, bassNotes, roomFor, type BassLine } from '../bass'
+import { isDrumTrack } from '../drums'
 import { engine } from '../engine'
 import { barChords } from '../harmony'
-import { addNote, fixNotesToKey, quantiseNotes, removeNotes, stepNotesInKey, transposeNotes, updateClip, updateNote, updateNotes } from '../state/actions'
+import { addNote, fixNotesToKey, replaceClip, quantiseNotes, removeNotes, stepNotesInKey, transposeNotes, updateClip, updateNote, updateNotes } from '../state/actions'
 import { useStudio } from '../state/store'
 import { isBlackKey, pitchName, snapTo, startDrag, useFrame } from '../util'
 import { Button, IconButton, Segmented, Toggle } from './controls/buttons'
 import { ChordBar } from './ChordBar'
 import { KeyPicker } from './KeyPicker'
+import { Picker } from './controls/Picker'
 import { useMenu } from './controls/Popover'
 import { ROLL_ZOOM, setLayout, useLayout } from './layout'
 
@@ -58,6 +61,7 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
   const [marquee, setMarquee] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const width = clip.length * pxPerTick
   const drums = track.instrument === 'drums'
+  const grow = useLayout((s) => s.patternGrow)
   // The key may change along the clip, so it is asked for by position: `key` is the one the clip starts in, which the
   // keyboard at the left is labelled by, and each note is judged by the key where it falls.
   const segments = drums ? [] : keySegments(project)
@@ -264,6 +268,23 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
   const strays = clip.notes.filter((n) => (!selected.length || selected.includes(n.id)) && outsideKey(n)).map((n) => n.id)
 
   const selectAll = (): void => useStudio.setState({ selectedNoteIds: clip.notes.map((n) => n.id) })
+
+  /**
+   * Starts the clip from a bass line, in the key and over the chords and the
+   * drums that are there now. A short clip is made eight bars long first, if
+   * that is wanted, so the line can run its course. One undo step.
+   */
+  const startFrom = (line: BassLine): void => {
+    const now = useStudio.getState().project
+    const length = grow ? roomFor(now, track, clip) : clip.length
+    const notes = bassNotes(line, now, track, clip.start, length)
+    replaceClip({ ...clip, length, notes })
+    useStudio.setState({ selectedNoteIds: [] })
+    // A bass line sits low: bring it into view.
+    const el = scroller.current
+    const pitches = notes.map((n) => n.pitch)
+    if (el && pitches.length) el.scrollTop = rowOf(Math.round((Math.min(...pitches) + Math.max(...pitches)) / 2)) * ROW_HEIGHT - el.clientHeight / 2
+  }
   const grid = SNAP_OPTIONS.find(([, ticks]) => ticks === snap)?.[0] ?? ''
 
   /** What a right-click offers for a set of notes; the heading says which. */
@@ -285,6 +306,24 @@ export function PianoRoll({ track, clip, viewSwitch }: { track: Track; clip: Mid
           {track.name}
         </span>
         {viewSwitch}
+        {!isDrumTrack(track) && (
+          <div className="pr-picker">
+            <Picker
+              label="Start from a bass line…"
+              title="Replace the clip's notes with a bass line in the song's key, following its chords and the kick of its drums"
+              placeholder="Search bass lines"
+              sections
+              groups={[...new Set(BASS_LINES.map((each) => each.style))].sort().map((style) => ({
+                label: style,
+                options: BASS_LINES.filter((each) => each.style === style)
+                  .sort((a, b) => (BASS_GROUPS[style]?.indexOf(a.group) ?? 0) - (BASS_GROUPS[style]?.indexOf(b.group) ?? 0))
+                  .map((each) => ({ value: each, label: each.name, detail: each.follow ? 'follows the kick' : `${each.bpm} bpm`, sub: each.group }))
+              }))}
+              onPick={startFrom}
+              actions={[{ label: `${grow ? '✓ ' : ''}Make the clip eight bars long`, onSelect: () => setLayout({ patternGrow: !grow }) }]}
+            />
+          </div>
+        )}
         <span className="pr-sep" />
         <span className="pr-label">Grid</span>
         <Segmented label="Grid" value={String(snap)} options={GRIDS} onChange={(value) => useStudio.setState({ snap: Number(value) })} />
