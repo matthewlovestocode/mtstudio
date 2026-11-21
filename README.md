@@ -2,11 +2,33 @@
 
 A digital audio workstation for the desktop: tracks, a piano roll, a step sequencer with drum patterns by style, bass, chord and synth parts, mic recording, effects, and SoundFont, SFZ and plugin instruments.
 
-There is no installer yet. To use mtstudio you download the source and run it from a terminal. That takes about fifteen minutes the first time, most of it waiting for the audio engine to build.
+## Download the app
 
-mtstudio is developed on macOS (12 or later). The code has paths for Windows and Linux, but they have not been tried.
+For Macs with Apple silicon (M1 or later), macOS 12 or later. On an Intel Mac, Windows or Linux, [run it from source](#run-from-source).
 
-## What you need first
+**The short way.** Paste this into Terminal. It downloads the latest release, puts mtstudio in Applications and opens it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/matthewlovestocode/mtstudio/main/scripts/install.sh | bash
+```
+
+**By hand.**
+
+1. Download `mtstudio-…-mac-arm64.zip` from the [latest release](https://github.com/matthewlovestocode/mtstudio/releases/latest).
+2. Unzip it and drag mtstudio into Applications.
+3. Open it. macOS will say it cannot verify the app, because mtstudio is not signed with an Apple developer certificate. Click **Done**, then go to System Settings › Privacy & Security, scroll down, and click **Open Anyway**. This is needed once. (The short way above does not meet this warning.)
+
+Either way, the first time mtstudio starts it downloads its instrument sounds (216 MB), showing how far it has got. After that it opens straight to a demo project; press Space to play.
+
+To update, do the same again with the newer release. macOS may ask about the microphone again after an update.
+
+## Run from source
+
+For development, or for machines the download does not cover. It takes about fifteen minutes the first time, most of it waiting for the audio engine to build.
+
+mtstudio is developed on macOS. The code has paths for Windows and Linux, but they have not been tried.
+
+### What you need first
 
 | What | Why | How to get it (macOS) |
 | --- | --- | --- |
@@ -17,7 +39,7 @@ mtstudio is developed on macOS (12 or later). The code has paths for Windows and
 
 You also need about 2 GB of free disk space and an internet connection for the first build.
 
-## Download and run
+### Get it and run it
 
 1. **Get the source.**
 
@@ -59,7 +81,7 @@ The very first start downloads Electron itself (about 100 MB), so it takes a min
 
 From then on, step 5 is all you need. Leave the terminal open while you use the app; closing it, or pressing Ctrl+C in it, quits mtstudio.
 
-## The quick way, without the audio engine
+### The quick way, without the audio engine
 
 If you only want a look, skip steps 3 and 4:
 
@@ -77,9 +99,23 @@ This runs on the browser's own audio. The built-in synth, sampler and drum machi
 
 - **More instruments.** The browser inside the app offers free SFZ packs (basses, pianos, drums and others) and installs them for you. Each is a few hundred megabytes.
 - **Surge XT.** If the free [Surge XT](https://surge-synthesizer.github.io) synthesizer is installed, its patches appear in mtstudio's instrument picker.
-- **Microphone.** The first time you record, macOS asks whether to allow the microphone. Because the app is started from a terminal, the permission may be asked for under your terminal's name. If recording is refused, allow it in System Settings › Privacy & Security › Microphone.
+- **Microphone.** The first time you record, macOS asks whether to allow the microphone. Run from source, the app is started from a terminal, so the permission may be asked for under your terminal's name. If recording is refused, allow it in System Settings › Privacy & Security › Microphone.
 
-## If something goes wrong
+## Making a release
+
+For whoever maintains the project. Set the new version in `package.json`, commit, then tag it and push the tag:
+
+```bash
+git tag v0.1.0
+```
+
+```bash
+git push origin v0.1.0
+```
+
+GitHub Actions ([release.yml](.github/workflows/release.yml)) builds the engine and the app and attaches the zip to a release of that name. `npm run dist` builds the same zip locally, into `dist/`.
+
+## If something goes wrong running from source
 
 | What you see | What to do |
 | --- | --- |

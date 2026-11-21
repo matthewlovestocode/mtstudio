@@ -4,13 +4,13 @@
  * repository at one pinned commit, fetched as an archive and unpacked into
  * `sfz/` in the content folder, where the list of instruments finds it.
  */
-import { app, dialog, type BrowserWindow } from 'electron'
+import { dialog, type BrowserWindow } from 'electron'
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ContentPack } from '@shared/bridge'
-import { contentFolder } from './sfz'
+import { bundledContent, contentFolder } from './sfz'
 
 interface ManifestPack {
   id: string
@@ -28,7 +28,7 @@ interface ManifestPack {
 
 /** The manifest is the repository's own (or the packaged app's): what may be installed is not something the content folder can say for itself. */
 async function manifest(): Promise<ManifestPack[]> {
-  const path = app.isPackaged ? join(process.resourcesPath, 'content', 'manifest.json') : join(app.getAppPath(), 'native', 'content', 'manifest.json')
+  const path = join(bundledContent(), 'manifest.json')
   const read = await readFile(path, 'utf8').catch(() => null)
   if (!read) return []
   // A pack's folder and repository become part of a path and an address, so only plain ones are taken.

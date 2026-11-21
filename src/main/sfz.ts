@@ -8,9 +8,17 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SfzInstrument } from '@shared/model'
 
-/** Where sound content is: `STUDIO_CONTENT`, or the folder `npm run fetch:content` fills (in a packaged app, the copy in its resources). */
+/**
+ * Where sound content is: `STUDIO_CONTENT`, or the folder `npm run fetch:content` fills. A packaged app keeps it with
+ * its settings, since it downloads the content itself and its own bundle is not a place to write to.
+ */
 export function contentFolder(): string {
   if (process.env.STUDIO_CONTENT) return process.env.STUDIO_CONTENT
+  return app.isPackaged ? join(app.getPath('userData'), 'content') : bundledContent()
+}
+
+/** Where the manifest of content and the licences are: the repository's folder, or the packaged app's copy of them. */
+export function bundledContent(): string {
   return app.isPackaged ? join(process.resourcesPath, 'content') : join(app.getAppPath(), 'native', 'content')
 }
 

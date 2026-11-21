@@ -1,0 +1,40 @@
+# Packages the app for download (npm run dist). The audio engine goes in beside
+# the app's resources, with the manifest of sound content and the licences;
+# the sounds themselves are downloaded on first run (src/main/firstRun.ts).
+appId: io.github.matthewlovestocode.mtstudio
+productName: mtstudio
+copyright: mtstudio is free software under the GNU AGPL, version 3 or later.
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: native/bin
+    to: .
+    filter:
+      - studio-engine
+      - studio-engine.exe
+  - from: native/content
+    to: content
+    filter:
+      - manifest.json
+      - licenses/**
+  - from: LICENSE
+    to: LICENSE
+  - from: native/THIRD_PARTY.md
+    to: THIRD_PARTY.md
+mac:
+  category: public.app-category.music
+  target:
+    - zip
+  artifactName: mtstudio-${version}-mac-${arch}.${ext}
+  # No Apple developer certificate: the app is signed ad hoc, which Apple
+  # silicon needs before it will run anything, and is approved by hand on
+  # first open (see the README).
+  identity: '-'
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  extendInfo:
+    NSMicrophoneUsageDescription: mtstudio records from the microphone or audio input you choose.
+publish: null

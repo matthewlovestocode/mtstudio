@@ -6,6 +6,7 @@ import { APP_NAME, MENUS, PANEL_WINDOW_PREFIX, type MenuSection } from '@shared/
 import { usedAssetIds, type Project } from '@shared/model'
 import type { EngineKind } from '@shared/nativeEngine'
 import * as audioFiles from './audioFiles'
+import { fetchMissingContent } from './firstRun'
 import { nativeEngineBuilt, nativeEnginePath, startNativeEngine } from './nativeEngine'
 import { contentPacks, installPack, removePack } from './packs'
 import { sfzInstruments } from './sfz'
@@ -31,7 +32,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 let mainWindow: BrowserWindow | null = null
 /**
  * Which audio engine the renderer uses. Web Audio unless the app is started
- * with STUDIO_ENGINE=native and the native engine has been built.
+ * with STUDIO_ENGINE=native and the native engine has been built, or is
+ * packaged with its engine.
  */
 let engineKind: EngineKind = 'web'
 let documentDirty = false
@@ -294,13 +296,17 @@ ipcMain.on('window:document', (_event, state: { title: string; dirty: boolean })
   if (process.platform === 'darwin') mainWindow?.setDocumentEdited(state.dirty)
 })
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   // Microphone and MIDI only; everything else a page could ask for is refused.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => callback(ALLOWED_PERMISSIONS.includes(permission)))
   session.defaultSession.setPermissionCheckHandler((_wc, permission) => ALLOWED_PERMISSIONS.includes(permission))
 
-  if (process.env.STUDIO_ENGINE === 'native') {
+  // A packaged app carries its engine and uses it; run from source, the engine is asked for.
+  const packagedEngine = app.isPackaged && process.env.STUDIO_ENGINE !== 'web' && nativeEngineBuilt()
+  if (process.env.STUDIO_ENGINE === 'native' || packagedEngine) {
     if (nativeEngineBuilt()) {
+      // Before the engine starts, so that it finds its SoundFont.
+      if (app.isPackaged) await fetchMissingContent()
       engineKind = 'native'
       startNativeEngine(
         () => mainWindow,
