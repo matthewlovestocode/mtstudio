@@ -409,7 +409,7 @@ export function fixNotesToKey(clipId: Id, ids: readonly Id[], keyOf: KeyOf): voi
 
 // ── Project settings ─────────────────────────────────────────────────────
 
-/** Sets the key the song starts in, or (null) says it has none. */
+/** Sets the key the song starts in, or (null) leaves it to be worked out from the notes. */
 export function setKey(key: Key | null): void {
   edit((p) => ({ ...p, key: key ?? undefined }))
 }
@@ -427,9 +427,10 @@ export function setKeyOf(id: Id | null, key: Key): void {
  */
 export function addKeyChange(bar: number, key?: Key): Id | null {
   const { project } = useStudio.getState()
-  if (bar <= 0 || !project.key || (project.keyChanges ?? []).some((change) => change.bar === bar)) return null
+  const there = keyAt(project, timeMap(project).barStart(bar))
+  if (bar <= 0 || !there || (project.keyChanges ?? []).some((change) => change.bar === bar)) return null
   const id = newId()
-  const here = key ?? keyAt(project, timeMap(project).barStart(bar)) ?? project.key
+  const here = key ?? there
   edit((p) => ({ ...p, keyChanges: [...(p.keyChanges ?? []), { id, bar, key: here }] }))
   return id
 }

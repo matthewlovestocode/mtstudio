@@ -2617,11 +2617,9 @@
   padding: 1px 0 1px 3px;
 }
 
-.studio .tl-key-none {
-  padding-left: var(--space-4);
-  color: var(--ink-faint);
-  font-size: var(--text-xs);
-  line-height: 21px;
+/* Before there is a key: the same place, with nothing marking a change. */
+.studio .tl .tl-key.none {
+  border-left-color: transparent;
 }
 
 .studio .key-near button {
@@ -2646,4 +2644,58 @@
 
 .studio .pr-key-seg.change {
   box-shadow: -2px 0 0 var(--accent);
+}
+
+/* Before there is a key: the one the notes suggest, to take in a click. */
+.studio .tl .tl-key.none {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.studio .tl-key-use {
+  height: 18px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-wash);
+  color: var(--ink);
+  font: var(--weight-normal) var(--text-sm) / 1 var(--font-ui);
+  white-space: nowrap;
+}
+
+.studio .tl-key-use strong {
+  color: var(--accent);
+  font-weight: var(--weight-strong);
+}
+
+.studio .tl-key-use:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.studio .tl-key-use:hover strong {
+  color: inherit;
+}
+
+.studio .tl-key-hint {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.studio .key-or {
+  margin-top: var(--space-5);
+}
+
+/* The key is the one the notes are in, not one that was chosen. */
+.studio .key-auto {
+  padding: 0 var(--space-2);
+  border-radius: 6px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: var(--weight-normal);
+  letter-spacing: var(--caps-spacing);
+  line-height: 13px;
+  text-transform: uppercase;
 }

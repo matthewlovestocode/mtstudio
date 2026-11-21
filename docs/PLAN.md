@@ -85,10 +85,13 @@ transport bar saying which engine is in use.
   the ruler; a menu on right-click for clips, lanes, the ruler and markers.
 - **Clip editors:** the piano roll (`PianoRoll.tsx`) and, for audio clips,
   a waveform with the clip's settings beside it (`AudioClipEditor.tsx`).
-- **Key (`shared/theory.ts`, `KeyPicker.tsx`):** a project can say what key
-  it is in (`Project.key`: a root and one of ten scales), set from the
-  transport bar or guessed from the notes already written (the
-  Krumhansl-Kessler profiles, major and minor only). It changes nothing
+- **Key (`shared/theory.ts`, `shared/keymap.ts`, `KeyPicker.tsx`):** a song
+  has a key without being asked for one. Until one is chosen
+  (`Project.key`: a root and one of ten scales) the key is worked out from
+  the notes written so far (the Krumhansl-Kessler profiles, major and
+  minor only, drums left out) and follows them as they change; it is
+  marked "auto" wherever it is shown. Choosing a key fixes it, and it can
+  be handed back to the notes. With too few notes to tell, there is none. It changes nothing
   that is heard. The piano roll goes by it: the key's notes are lit and
   named and the rest dimmed, the root marked, and a note outside the key
   hatched. Lock keeps drawn and dragged notes on the key and makes a

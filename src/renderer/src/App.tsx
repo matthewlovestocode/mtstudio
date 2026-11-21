@@ -35,7 +35,7 @@ export function App(): React.JSX.Element {
         e.preventDefault()
         const up = key === 'arrowup' ? 1 : -1
         // With the piano roll's Lock on, an arrow is a step of the key; Shift is an octave either way.
-        if ((key === 'arrowup' || key === 'arrowdown') && !e.shiftKey && project.key && useLayout.getState().scaleLock)
+        if ((key === 'arrowup' || key === 'arrowdown') && !e.shiftKey && useLayout.getState().scaleLock && keyAt(project, open.start))
           stepNotesInKey(open.id, notes, up, (note) => keyAt(project, open.start + note.start))
         else if (key === 'arrowup' || key === 'arrowdown') transposeNotes(open.id, notes, up * (e.shiftKey ? 12 : 1))
         else removeNotes(open.id, notes)

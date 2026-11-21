@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { keySegments, segmentAt } from '@shared/keymap'
-import type { Id } from '@shared/model'
+import type { Id, Project } from '@shared/model'
 import { SCALES, guessKeys, keyName, pitchClassName, relatedKeys, type Key, type KeyGuess, type ScaleId } from '@shared/theory'
 import { isDrumTrack } from '../drums'
 import { removeKeyChange, setKey, setKeyOf } from '../state/actions'
@@ -12,16 +12,26 @@ import { setLayout, useLayout } from './layout'
 const ROOTS = Array.from({ length: 12 }, (_, i) => i)
 const SCALE_IDS = Object.keys(SCALES) as ScaleId[]
 
+/**
+ * Keys to begin in for someone who does not yet know which they want: the two
+ * that use only a piano's white keys, and the two a step from them.
+ */
+export const STARTER_KEYS: { key: Key; why: string }[] = [
+  { key: { root: 0, scale: 'major' }, why: 'bright; the white keys only' },
+  { key: { root: 9, scale: 'minor' }, why: 'dark; the white keys only' },
+  { key: { root: 7, scale: 'major' }, why: 'bright; one black key' },
+  { key: { root: 4, scale: 'minor' }, why: 'dark; one black key' }
+]
+
 /** The key that best fits the notes in the project, best first. Drums are left out: their notes are sounds, not pitches. */
-function guessProjectKey(): KeyGuess[] {
-  const { project } = useStudio.getState()
+export function guessProjectKey(project: Project = useStudio.getState().project): KeyGuess[] {
   return guessKeys(project.tracks.filter((track) => track.kind === 'midi' && !isDrumTrack(track)).flatMap((track) => track.clips.flatMap((clip) => (clip.kind === 'midi' ? clip.notes : []))))
 }
 
 /**
- * Shows the key of one stretch of the song and lets it be chosen: a root and
- * a scale. For the key the song starts in, it can be guessed from the notes
- * already written; for a change of key, the keys that sit near the one
+ * Shows the key of one stretch of the song and lets it be chosen. The key the
+ * song starts in is worked out from the notes unless one is chosen, and
+ * choosing fixes it; for a change of key, the keys that sit near the one
  * before it are offered. The key changes nothing that is heard; it is what
  * the piano roll goes by to show which notes belong.
  */
@@ -36,17 +46,20 @@ export function KeyPicker(props: {
   const project = useStudio((s) => s.project)
   const scaleKeys = useLayout((s) => s.scaleKeys)
   const [origin, setOrigin] = useState<Origin | null>(null)
-  const [guesses, setGuesses] = useState<KeyGuess[] | null>(null)
   const button = useRef<HTMLButtonElement>(null)
 
   const segments = keySegments(project)
   const segment = segmentAt(segments, props.at ?? 0)
   const key = segment?.key ?? null
+  /** The key is the one the notes are in, not one that was chosen: it will follow them. */
+  const auto = segment?.auto ?? false
   const id: Id | null = segment?.id ?? null
   const before = id === null ? null : (segments[segments.indexOf(segment!) - 1]?.key ?? null)
   // Choosing a root with no scale yet starts from major, the commonest; a scale with no root, from C.
   const current: Key = key ?? { root: 0, scale: 'major' }
   const choose = (next: Key): void => setKeyOf(id, next)
+  // What the notes suggest, for the key the song starts in: worked out as the panel opens.
+  const found = origin && id === null ? guessProjectKey(project) : []
 
   useEffect(() => {
     if (props.openNow && button.current) setOrigin({ el: button.current })
@@ -63,23 +76,46 @@ export function KeyPicker(props: {
         className={`key-button ${key ? 'set' : ''} ${look}`}
         title={
           key
-            ? `${id === null ? (segments.length > 1 ? 'The song starts in' : 'The song is in') : 'From here the song is in'} ${keyName(key)}. Click to change the key.`
-            : 'Set the key the song is in, so the piano roll can show which notes belong'
+            ? `${id === null ? (segments.length > 1 ? 'The song starts in' : 'The song is in') : 'From here the song is in'} ${keyName(key)}${auto ? ', worked out from your notes; it will follow them as they change' : ''}. Click to choose the key.`
+            : 'The key is worked out from your notes once there are a few. Click to choose one now.'
         }
         aria-haspopup="dialog"
         aria-expanded={!!origin}
         onClick={(event) => {
-          setGuesses(null)
           setOrigin(origin ? null : { el: event.currentTarget })
         }}
         // In the timeline's row a double-click adds a change of key; one on a key already there is not that.
         onDoubleClick={(event) => event.stopPropagation()}
       >
-        {key ? keyName(key) : 'Key'}
+        {key ? keyName(key) : look === 'bar' ? 'Key' : 'Choose…'}
+        {auto && <span className="key-auto">auto</span>}
         <Caret />
       </button>
       {origin && (
         <Popover origin={origin} onClose={() => setOrigin(null)} className="key-panel">
+          {id === null && (
+            <>
+              {/* The key is found, not asked for: what the notes are in comes first, or with no notes a few easy places to start. Choosing any of them fixes the key. */}
+              <div className="key-head">{found.length ? 'What your notes are in' : 'A key to start in'}</div>
+              <div className="key-guesses key-near">
+                {found.length
+                  ? found.slice(0, 3).map((guess, i) => (
+                      <button key={keyName(guess.key)} type="button" className={key && keyName(key) === keyName(guess.key) ? 'on' : ''} onClick={() => choose(guess.key)}>
+                        {keyName(guess.key)}
+                        <span>{i === 0 ? (guess.fit > 0.6 ? 'the best fit' : 'the best guess') : 'also fits'}</span>
+                      </button>
+                    ))
+                  : STARTER_KEYS.map((starter) => (
+                      <button key={keyName(starter.key)} type="button" className={key && keyName(key) === keyName(starter.key) ? 'on' : ''} onClick={() => choose(starter.key)}>
+                        {keyName(starter.key)}
+                        <span>{starter.why}</span>
+                      </button>
+                    ))}
+              </div>
+              <p className="key-note key-or">{auto ? 'The key follows your notes. To fix it, choose one:' : 'Or choose one yourself:'}</p>
+            </>
+          )}
+
           <div className="key-head">Root</div>
           <div className="key-roots" role="radiogroup" aria-label="Root">
             {ROOTS.map((root) => (
@@ -97,7 +133,7 @@ export function KeyPicker(props: {
             ))}
           </div>
 
-          {before ? (
+          {before && (
             <>
               <div className="key-head">Near {keyName(before)}</div>
               <div className="key-guesses key-near">
@@ -109,36 +145,15 @@ export function KeyPicker(props: {
                 ))}
               </div>
             </>
-          ) : (
-            <>
-              <div className="key-head">From what is written</div>
-              {guesses === null ? (
-                <Button title="Work out the key from the notes in the project" onClick={() => setGuesses(guessProjectKey())}>
-                  Detect the key
-                </Button>
-              ) : guesses.length === 0 ? (
-                <p className="key-note">There are too few notes yet to tell. Write a melody or some chords first.</p>
-              ) : (
-                <div className="key-guesses">
-                  {guesses.slice(0, 3).map((guess, i) => (
-                    <button key={keyName(guess.key)} type="button" className={key && keyName(key) === keyName(guess.key) ? 'on' : ''} onClick={() => choose(guess.key)}>
-                      {keyName(guess.key)}
-                      <span>{i === 0 ? (guess.fit > 0.6 ? 'best fit' : 'best guess') : 'also fits'}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
           )}
-
           <div className="key-foot">
             <Toggle label="Play the scale from the typing keyboard: A to K go up the key's notes, so no key is a wrong note" size="sm" pressed={scaleKeys} onChange={(on) => setLayout({ scaleKeys: on })}>
               A–K play the scale
             </Toggle>
             <span className="key-space" />
             {id === null ? (
-              <Button disabled={!key} title="Say the song has no key: every note is shown alike" onClick={() => setKey(null)}>
-                No key
+              <Button disabled={!project.key} title="Stop fixing the key: let it be worked out from the notes, and follow them as they change" onClick={() => setKey(null)}>
+                {project.key ? 'Automatic' : 'Following your notes'}
               </Button>
             ) : (
               <Button

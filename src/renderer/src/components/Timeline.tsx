@@ -432,13 +432,13 @@ function KeyRow({ project, map, pxPerTick, openMenu }: { project: Project; map: 
       </div>
       <div
         className="global-lane"
-        title={project.key ? 'Double-click to change key at that bar. Right-click for more.' : 'Set a key first (in the bar across the top); then double-click here to change key at a bar.'}
+        title={segments.length ? 'Double-click to change key at that bar. Right-click for more.' : 'The key is worked out from the notes once there are a few. After that, double-click here to change key at a bar.'}
         onDoubleClick={(e) => {
           if (e.target === e.currentTarget) add(barAt(e))
         }}
         onContextMenu={(e) => {
           const bar = barAt(e)
-          openMenu(e, [{ label: `Change Key at Bar ${bar + 1}`, disabled: bar <= 0 || !project.key, onSelect: () => add(bar) }])
+          openMenu(e, [{ label: `Change Key at Bar ${bar + 1}`, disabled: bar <= 0 || !segments.length, onSelect: () => add(bar) }])
         }}
       >
         {segments.map((segment) => (
@@ -459,7 +459,13 @@ function KeyRow({ project, map, pxPerTick, openMenu }: { project: Project; map: 
             <KeyPicker at={segment.tick} look="marker" openNow={segment.id !== null && segment.id === fresh} />
           </div>
         ))}
-        {segments.length === 0 && <span className="tl-key-none">No key set</span>}
+        {/* No key, and too few notes yet to work one out: it can be chosen here, or left until there are. */}
+        {segments.length === 0 && (
+          <div className="marker tl-key none">
+            <span className="tl-key-hint">Worked out once there are a few notes</span>
+            <KeyPicker at={0} look="marker" />
+          </div>
+        )}
       </div>
     </div>
   )
