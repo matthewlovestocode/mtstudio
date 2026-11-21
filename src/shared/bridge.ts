@@ -3,7 +3,7 @@ import type { NativeEngineBridge } from './nativeEngine'
 import type { StreamInfo } from './pcm'
 
 import type { MenuCommand } from './menu'
-import type { SoundFontPreset } from './model'
+import type { SfzInstrument, SoundFontPreset, SurgePatch } from './model'
 
 export type { MenuCommand }
 
@@ -66,6 +66,12 @@ export interface StudioBridge {
   readAutosave(): Promise<string | null>
   /** The presets of the SoundFont that General MIDI instruments are played from; null if it is not installed. */
   soundFontPresets(): Promise<SoundFontPreset[] | null>
+  /** The SFZ instruments installed in the content folder. */
+  sfzInstruments(): Promise<SfzInstrument[]>
+  /** Surge XT's patches, if it is installed. */
+  surgePatches(): Promise<SurgePatch[]>
+  /** The plugin state (`Track.pluginState`) that loads one of those patches into Surge XT; null if it cannot be read. */
+  surgePatchState(path: string): Promise<string | null>
   /** Absolute path of a File chosen or dropped by the user. */
   pathForFile(file: File): string
   onMenuCommand(handler: (command: MenuCommand) => void): void

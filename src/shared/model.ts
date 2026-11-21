@@ -68,10 +68,32 @@ export interface SynthParams {
 }
 
 /**
- * 'plugin' is a VST3 or Audio Unit instrument (`Track.plugin`) and 'soundfont' a preset of the bundled
- * SoundFont (`Track.soundfont`). Only the native engine can play either.
+ * 'plugin' is a VST3 or Audio Unit instrument (`Track.plugin`), 'soundfont' a preset of the bundled
+ * SoundFont (`Track.soundfont`) and 'sfz' an SFZ instrument from the content folder (`Track.sfz`).
+ * Only the native engine can play those three.
  */
-export type InstrumentType = 'synth' | 'drums' | 'sampler' | 'plugin' | 'soundfont'
+export type InstrumentType = 'synth' | 'drums' | 'sampler' | 'plugin' | 'soundfont' | 'sfz'
+
+/** An SFZ instrument: a file that maps samples across the keyboard, in the content folder. */
+export interface SfzInstrument {
+  /** Its path within the content folder, with forward slashes: `sfz/Some Pack/Programs/Piano.sfz`. */
+  file: string
+  /** The file's name without `.sfz`; kept so the track can be labelled where the pack is not installed. */
+  name: string
+  /** The pack it belongs to: the folder directly under `sfz/`. */
+  pack: string
+}
+
+/** One of Surge XT's patches, found on disk. */
+export interface SurgePatch {
+  name: string
+  /** The folder it is filed under: Basses, Leads, Pads … */
+  category: string
+  /** 'Factory', or whoever made it. */
+  author: string
+  /** The .fxp file. */
+  path: string
+}
 
 /** A preset of a SoundFont: an instrument such as a piano, or (in bank 128) a drum kit. */
 export interface SoundFontPreset {
@@ -160,8 +182,12 @@ export interface Track {
   /** The instrument when `instrument` is 'plugin', and its settings (as `Effect.state`). */
   plugin?: PluginRef
   pluginState?: string
+  /** The name of the patch the plugin instrument was last given from the app's own picker. Changing the sound in the plugin's window does not update it. */
+  pluginPatch?: string
   /** The instrument when `instrument` is 'soundfont'. */
   soundfont?: SoundFontPreset
+  /** The instrument when `instrument` is 'sfz'. */
+  sfz?: SfzInstrument
   /** Insert effects, in signal order. */
   effects?: Effect[]
   sends?: Send[]

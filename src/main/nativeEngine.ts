@@ -8,6 +8,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
+import { contentFolder } from './sfz'
 import { soundFontPath } from './soundfont'
 import type { NativeAsset, NativeCommand, NativeEvent, NativeLatency, NativePlugins, NativeTake } from '@shared/nativeEngine'
 
@@ -69,8 +70,8 @@ export function startNativeEngine(
     deliver({ type: 'exit', reason })
   }
 
-  // The engine is told where the SoundFont is, so that it and the app's list of presets are of the same file.
-  child = spawn(nativeEnginePath(), [], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, STUDIO_SOUNDFONT: soundFontPath() } })
+  // The engine is told where the sound content is, so that it plays from the same files the app lists.
+  child = spawn(nativeEnginePath(), [], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, STUDIO_SOUNDFONT: soundFontPath(), STUDIO_CONTENT: contentFolder() } })
   child.on('error', (error) => ended(`The native audio engine could not be started: ${error.message}`))
   child.on('exit', (code, signal) => ended(`The native audio engine stopped unexpectedly (${signal ?? `exit code ${code}`}).`))
   // A write to an engine that has just died must not take the app down with it.

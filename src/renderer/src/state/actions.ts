@@ -21,6 +21,7 @@ import {
   type PluginRef,
   type Project,
   type Track,
+  type SfzInstrument,
   type SoundFontPreset
 } from '@shared/model'
 import { timeMap, type TimeMap } from '@shared/timemap'
@@ -139,12 +140,22 @@ export function addPluginEffect(trackId: Id, plugin: PluginRef): void {
 
 /** Makes a plugin the track's instrument, with the settings it starts with. */
 export function setInstrumentPlugin(trackId: Id, plugin: PluginRef): void {
-  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: undefined })))
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: undefined, pluginPatch: undefined })))
+}
+
+/** Makes a plugin the track's instrument with a patch already loaded: `state` is the plugin state that holds it. */
+export function setInstrumentPatch(trackId: Id, plugin: PluginRef, state: string, patch: string): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'plugin', plugin, pluginState: state, pluginPatch: patch })))
 }
 
 /** Makes a preset of the SoundFont the track's instrument. */
 export function setInstrumentSoundFont(trackId: Id, soundfont: SoundFontPreset): void {
   edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'soundfont', soundfont })))
+}
+
+/** Makes an SFZ instrument the track's instrument. */
+export function setInstrumentSfz(trackId: Id, sfz: SfzInstrument): void {
+  edit((p) => mapTrack(p, trackId, (t) => ({ ...t, instrument: 'sfz', sfz })))
 }
 
 /** Records the settings a plugin reports (`effectId` null for the track's instrument). A run of reports is one undo step. */

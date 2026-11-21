@@ -3,7 +3,7 @@
 // which loads just the samples its preset uses.
 #pragma once
 
-#include <juce_core/juce_core.h>
+#include "Sampled.h"
 #include <memory>
 
 struct _fluid_synth_t;
@@ -11,10 +11,8 @@ struct _fluid_hashtable_t;
 
 namespace studio
 {
-struct PluginEvent;
-
 /** One track's SoundFont instrument: a preset of the bank, with its own sounding voices. */
-class SoundFontPlayer
+class SoundFontPlayer : public SampledInstrument
 {
 public:
     /**
@@ -26,23 +24,14 @@ public:
     static std::shared_ptr<SoundFontPlayer> create (int bank, int program, double rate);
     /** Why the last `create` that returned null did; empty if none has. */
     static juce::String problem();
-    /** Where the SoundFont is looked for: `STUDIO_SOUNDFONT`, or `content/` beside the engine's `bin/`. */
+    /** Where the SoundFont is looked for: `STUDIO_SOUNDFONT`, or MuseScore General in the content folder. */
     static juce::File file();
 
-    ~SoundFontPlayer();
-
-    /**
-     * Renders a chunk, adding to what is in `left` and `right`. `events` are
-     * note-ons and note-offs as for a plugin instrument, each taking effect
-     * on its exact frame; they need not be in order. Audio thread.
-     */
-    void process (float* left, float* right, int frames, const PluginEvent* events, int count);
-
-    const int bank, program;
-    const double rate;
+    ~SoundFontPlayer() override;
+    void process (float* left, float* right, int frames, const PluginEvent* events, int count) override;
 
 private:
-    SoundFontPlayer (int bankIn, int programIn, double rateIn) : bank (bankIn), program (programIn), rate (rateIn) {}
+    SoundFontPlayer() = default;
 
     _fluid_hashtable_t* settings = nullptr;
     _fluid_synth_t* synth = nullptr;

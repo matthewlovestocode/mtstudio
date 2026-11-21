@@ -196,6 +196,7 @@ static juce::String mixdown (const juce::var& project, AssetStore assets, double
     if (endTick <= 0) return "There is nothing to export.";
 
     SnapshotBuilder builder;
+    builder.offline = true;
     // An offline render cannot wait on the loader thread: streamed files get streams of their own that read as they go.
     for (auto& [id, sample] : assets)
         if (sample->stream != nullptr)
@@ -854,6 +855,7 @@ static int renderToFile (const juce::File& projectFile, double seconds, const ju
     const juce::ScopedJuceInitialiser_GUI juce;
     auto engine = std::make_unique<Engine>();
     SnapshotBuilder builder;
+    builder.offline = true;
     engine->prepare (rate);
     juce::AudioPluginFormatManager formats;
     juce::addDefaultFormatsToManager (formats);

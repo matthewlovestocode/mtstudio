@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "Sfz.h"
 #include "SoundFont.h"
 #include "Stream.h"
 #include "Stretch.h"
@@ -162,7 +163,7 @@ std::shared_ptr<const Snapshot> SnapshotBuilder::build (const juce::var& project
 
     std::vector<std::pair<juce::String, std::shared_ptr<Strip>>> next;
     std::map<juce::String, std::shared_ptr<EffectUnit>> nextEffects;
-    std::map<juce::String, std::shared_ptr<SoundFontPlayer>> nextSoundfonts;
+    std::map<juce::String, std::shared_ptr<SampledInstrument>> nextSampled;
     wanted.clear();
     for (const auto& track : tracks)
     {
@@ -209,26 +210,32 @@ std::shared_ptr<const Snapshot> SnapshotBuilder::build (const juce::var& project
         const auto instrument = track["instrument"].toString();
         if (kind == "midi")
             out.instrument = instrument == "drums" ? Instrument::drums : instrument == "sampler" ? Instrument::sampler
-                           : instrument == "plugin" ? Instrument::plugin : instrument == "soundfont" ? Instrument::soundfont : Instrument::synth;
+                           : instrument == "plugin" ? Instrument::plugin : instrument == "soundfont" ? Instrument::soundfont
+                           : instrument == "sfz" ? Instrument::sfz : Instrument::synth;
         if (out.instrument == Instrument::plugin)
         {
             if (plugins) out.plugin = plugins (id + "/instrument");
             // Silent if the plugin is not loaded.
             if (out.plugin == nullptr) out.instrument = Instrument::none;
         }
-        if (out.instrument == Instrument::soundfont)
+        if (out.instrument == Instrument::soundfont || out.instrument == Instrument::sfz)
         {
-            const auto& chosen = track["soundfont"];
+            const bool font = out.instrument == Instrument::soundfont;
+            const auto& chosen = track[font ? "soundfont" : "sfz"];
             const int bank = (int) num (chosen, "bank", 0), program = (int) num (chosen, "program", 0);
-            // The same preset as before keeps its player, and with it the notes still sounding.
-            if (const auto existing = soundfonts.find (id); existing != soundfonts.end() && existing->second->bank == bank
-                                                            && existing->second->program == program && existing->second->rate == rate)
-                out.soundfont = existing->second;
+            const auto file = chosen["file"].toString();
+            const auto key = font ? "soundfont:" + juce::String (bank) + ":" + juce::String (program) + "@" + juce::String (rate)
+                                  : "sfz:" + file + "@" + juce::String (rate);
+            // The same sound as before keeps its player, and with it the notes still sounding.
+            if (const auto existing = sampledPlayers.find (id); existing != sampledPlayers.end() && existing->second->key == key)
+                out.sampled = existing->second;
+            else if (font)
+                out.sampled = SoundFontPlayer::create (bank, program, rate);
             else
-                out.soundfont = SoundFontPlayer::create (bank, program, rate);
-            // Silent if there is no SoundFont, or no such preset in it.
-            if (out.soundfont == nullptr) out.instrument = Instrument::none;
-            else nextSoundfonts[id] = out.soundfont;
+                out.sampled = SfzPlayer::create (file, rate, offline);
+            // Silent if the content is not there to play.
+            if (out.sampled == nullptr) out.instrument = Instrument::none;
+            else nextSampled[id] = out.sampled;
         }
         out.params = synthParams (track["synth"]);
         if (const auto& sampler = track["sampler"]; sampler.isObject())
@@ -300,7 +307,7 @@ std::shared_ptr<const Snapshot> SnapshotBuilder::build (const juce::var& project
     }
     current = std::move (next);
     effects = std::move (nextEffects);
-    soundfonts = std::move (nextSoundfonts);
+    sampledPlayers = std::move (nextSampled);
 
     // Delay compensation: what each strip's plugins hold its audio back by, and what the others must wait to match.
     std::vector<int> own (snapshot->tracks.size(), 0);

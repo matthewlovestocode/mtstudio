@@ -44,7 +44,7 @@ juce::File SoundFontPlayer::file()
 {
     const auto named = juce::SystemStats::getEnvironmentVariable ("STUDIO_SOUNDFONT", {});
     if (named.isNotEmpty()) return juce::File (named);
-    return juce::File::getSpecialLocation (juce::File::currentExecutableFile).getParentDirectory().getSiblingFile ("content").getChildFile ("MuseScore_General.sf2");
+    return contentFolder().getChildFile ("MuseScore_General.sf2");
 }
 
 juce::String SoundFontPlayer::problem()
@@ -63,7 +63,8 @@ std::shared_ptr<SoundFontPlayer> SoundFontPlayer::create (int bankNumber, int pr
         return nullptr;
     }
 
-    auto player = std::shared_ptr<SoundFontPlayer> (new SoundFontPlayer (bankNumber, program, rate));
+    auto player = std::shared_ptr<SoundFontPlayer> (new SoundFontPlayer());
+    player->key = "soundfont:" + juce::String (bankNumber) + ":" + juce::String (program) + "@" + juce::String (rate);
     auto* settings = player->settings = new_fluid_settings();
     fluid_settings_setnum (settings, "synth.sample-rate", rate);
     fluid_settings_setnum (settings, "synth.gain", gain);
@@ -106,16 +107,9 @@ SoundFontPlayer::~SoundFontPlayer()
 
 void SoundFontPlayer::process (float* left, float* right, int frames, const PluginEvent* events, int count)
 {
-    // The events arrive as they were thought of (note-ons as the sequencer found
-    // them, then the note-offs due in this chunk), so they are put in order first.
     int order[Strip::maxPluginEvents];
     count = std::min (count, Strip::maxPluginEvents);
-    for (int i = 0; i < count; ++i)
-    {
-        int at = i;
-        for (; at > 0 && events[order[at - 1]].frame > events[i].frame; --at) order[at] = order[at - 1];
-        order[at] = i;
-    }
+    sortByFrame (events, count, order);
 
     auto* l = buffer.get();
     auto* r = l + Strip::maxBlock;

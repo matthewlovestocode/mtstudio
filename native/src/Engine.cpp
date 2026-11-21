@@ -1,6 +1,6 @@
 #include "Engine.h"
 #include "Plugins.h"
-#include "SoundFont.h"
+#include "Sampled.h"
 #include "Stream.h"
 
 namespace studio
@@ -182,7 +182,7 @@ void Engine::startVoice (const TrackSnapshot& track, int pitch, float velocity, 
     auto& strip = *track.strip;
     if (track.takesEvents())
     {
-        // A plugin or a SoundFont is sent the note; it is let go in `mixStrip` when its time comes.
+        // The instrument is sent the note; it is let go in `mixStrip` when its time comes.
         strip.pluginRelease (pitch, offset);
         if (strip.pluginNoteCount == Strip::maxPluginNotes) return;
         strip.pluginEvent (offset, 0x90, juce::jlimit (0, 127, pitch), juce::jlimit (1, 127, (int) std::lround (velocity * 127.0f)));
@@ -419,7 +419,7 @@ void Engine::mixStrip (const TrackSnapshot& track, int frames)
 {
     auto& strip = *track.strip;
 
-    if (track.plugin != nullptr || track.soundfont != nullptr)
+    if (track.takesEvents())
     {
         // Notes that end within this chunk are let go on their exact frame.
         for (int n = 0; n < strip.pluginNoteCount;)
@@ -430,7 +430,7 @@ void Engine::mixStrip (const TrackSnapshot& track, int frames)
             strip.pluginNotes[n] = strip.pluginNotes[--strip.pluginNoteCount];
         }
         if (track.plugin != nullptr) track.plugin->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount, true);
-        else track.soundfont->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount);
+        else track.sampled->process (strip.left, strip.right, frames, strip.pluginEvents, strip.pluginEventCount);
     }
     else strip.pluginNoteCount = 0;
     strip.pluginEventCount = 0;

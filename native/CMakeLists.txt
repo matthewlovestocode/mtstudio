@@ -23,6 +23,47 @@ else()
   FetchContent_MakeAvailable(JUCE)
 endif()
 
+# sfizz plays SFZ instruments. It is built as part of this project, as static
+# libraries, without its plug-ins, stand-alone players or tools. Not vendored:
+# a checkout in deps/sfizz (with its submodules) is used if present; otherwise
+# the pinned release is fetched.
+set(SFIZZ_SHARED OFF CACHE BOOL "" FORCE)
+set(SFIZZ_JACK OFF CACHE BOOL "" FORCE)
+set(SFIZZ_RENDER OFF CACHE BOOL "" FORCE)
+set(SFIZZ_TESTS OFF CACHE BOOL "" FORCE)
+# Link-time optimisation across a library this size makes every build of the engine slow.
+set(ENABLE_LTO OFF CACHE BOOL "" FORCE)
+# sfizz takes any processor whose name starts "arm" for 32-bit ARM and passes
+# the compiler flags for one, which a 64-bit ARM compiler (Apple silicon)
+# refuses. Named this way it adds no flags; NEON is always there on 64-bit ARM.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)" AND NOT CMAKE_OSX_ARCHITECTURES)
+  set(PROJECT_SYSTEM_PROCESSOR "aarch64" CACHE STRING "" FORCE)
+endif()
+# sfizz is C++17: under C++20 its u8"" literals change type and no longer compile.
+set(CMAKE_CXX_STANDARD 17)
+# A queue it bundles writes `.template f(...)` with no argument list, which current
+# Clang counts an error unless told otherwise. Set for sfizz's directory only.
+set(STUDIO_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unknown-warning-option -Wno-missing-template-arg-list-after-template-kw")
+endif()
+if(EXISTS "${CMAKE_SOURCE_DIR}/deps/sfizz/CMakeLists.txt")
+  add_subdirectory(deps/sfizz EXCLUDE_FROM_ALL)
+else()
+  include(FetchContent)
+  FetchContent_Declare(
+    sfizz
+    GIT_REPOSITORY https://github.com/sfztools/sfizz.git
+    GIT_TAG 1.2.3
+    GIT_SHALLOW TRUE
+    GIT_SUBMODULES_RECURSE TRUE
+    EXCLUDE_FROM_ALL
+  )
+  FetchContent_MakeAvailable(sfizz)
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS "${STUDIO_CXX_FLAGS}")
+
 juce_add_console_app(studio-engine PRODUCT_NAME "studio-engine")
 
 # FluidSynth plays SoundFont instruments. It is built on its own, as a static
@@ -74,6 +115,7 @@ target_sources(studio-engine PRIVATE
   src/Engine.cpp
   src/Model.cpp
   src/Plugins.cpp
+  src/Sfz.cpp
   src/SoundFont.cpp
 )
 
@@ -95,6 +137,7 @@ target_link_libraries(studio-engine
     juce::juce_audio_formats
     juce::juce_audio_processors
     fluidsynth
+    sfizz::static
   PUBLIC
     juce::juce_recommended_config_flags
 )

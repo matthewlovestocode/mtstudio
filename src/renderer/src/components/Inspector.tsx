@@ -7,23 +7,27 @@ import {
   type InstrumentType,
   type PluginRef,
   type SamplerParams,
+  type SfzInstrument,
   type SoundFontPreset,
+  type SurgePatch,
   type SynthParams,
   type Track,
   type Waveform
 } from '@shared/model'
 import { TextField } from './controls/fields'
 import { nativeEngine } from '../engine'
-import { loadSampleDialog } from '../platform'
 import { pluginLabel, scanPlugins, usePlugins } from '../plugins'
-import { DRUM_BANK, useSoundFontPresets } from '../soundfont'
+import { bridge, loadSampleDialog } from '../platform'
+import { DRUM_BANK, useSfzInstruments, useSoundFontPresets, useSurgePatches } from '../soundfont'
 import {
   addEffect,
   addPluginEffect,
   findClip,
   removeEffect,
   setInstrument,
+  setInstrumentPatch,
   setInstrumentPlugin,
+  setInstrumentSfz,
   setInstrumentSoundFont,
   setSend,
   updateEffect,
@@ -59,10 +63,21 @@ const ATTACK = logCurve(0.001, 1)
 const DECAY = logCurve(0.01, 2)
 const RELEASE = logCurve(0.01, 3)
 
+/**
+ * Many plugins install as both a VST3 and an Audio Unit, and a scan finds
+ * both. Listing each twice only invites the question of which to pick, so
+ * where a plugin has a VST3 that is the one offered.
+ */
+function oneFormatEach(plugins: PluginRef[]): PluginRef[] {
+  const id = (plugin: PluginRef): string => `${plugin.manufacturer}/${plugin.name}`
+  const vst3 = new Set(plugins.filter((plugin) => plugin.format === 'VST3').map(id))
+  return plugins.filter((plugin) => plugin.format === 'VST3' || !vst3.has(id(plugin)))
+}
+
 /** What is in the scan's results, and how to ask for another. Shared by the instrument and effect pickers. */
 function usePluginChoices(): { instruments: PluginRef[]; effects: PluginRef[]; actions: { label: string; onSelect: () => void; disabled?: boolean }[]; note: string | null } {
   const list = usePlugins()
-  const all = list.plugins ?? []
+  const all = oneFormatEach(list.plugins ?? [])
   const failed = list.failed.length
   return {
     instruments: all.filter((p) => p.instrument),
@@ -151,20 +166,42 @@ function InstrumentSection({ track }: { track: Track }): React.JSX.Element {
   // The SoundFont's presets by where they sit: bank 0 is the General MIDI set, bank 128 the drum kits, and the rest variations on bank 0.
   const sounds = (from: (preset: SoundFontPreset) => boolean, detail: (preset: SoundFontPreset) => string | undefined): { value: SoundFontPreset; label: string; detail?: string }[] =>
     (presets ?? []).filter(from).map((preset) => ({ value: preset, label: preset.name, detail: detail(preset) }))
-  const groups: PickerGroup<InstrumentType | PluginRef | SoundFontPreset>[] = [
+  const sfz = useSfzInstruments()
+  const packs = [...new Set(sfz.map((each) => each.pack))]
+  // Surge XT's patches are offered once a scan has found Surge XT itself, which is what plays them.
+  const surge = choices.instruments.find((plugin) => plugin.name === 'Surge XT' && plugin.format === 'VST3')
+  const patches = useSurgePatches()
+  const categories = surge ? [...new Set(patches.map((patch) => patch.category))] : []
+  const pickPatch = async (patch: SurgePatch): Promise<void> => {
+    const state = await bridge?.surgePatchState(patch.path)
+    if (surge && state) setInstrumentPatch(track.id, surge, state, patch.name)
+    else window.alert(`The Surge XT patch “${patch.name}” could not be read.`)
+  }
+  const groups: PickerGroup<InstrumentType | PluginRef | SoundFontPreset | SfzInstrument | SurgePatch>[] = [
     { label: 'Built in', options: INSTRUMENTS.map(([value, label]) => ({ value, label })) },
     { label: 'General MIDI', options: sounds((p) => p.bank === 0, (p) => String(p.program + 1)) },
     { label: 'Drum kits', options: sounds((p) => p.bank === DRUM_BANK, () => undefined) },
     { label: 'More sounds', options: sounds((p) => p.bank !== 0 && p.bank !== DRUM_BANK, (p) => `Bank ${p.bank}`) },
-    { label: 'Plugins', options: choices.instruments.map((plugin) => ({ value: plugin, label: plugin.name, detail: [plugin.manufacturer, plugin.format === 'AudioUnit' ? 'AU' : plugin.format].filter(Boolean).join(' · ') })) }
+    // One group for each SFZ pack installed.
+    ...packs.map((pack) => ({ label: pack, options: sfz.filter((each) => each.pack === pack).map((each) => ({ value: each, label: each.name })) })),
+    { label: 'Plugins', options: choices.instruments.map((plugin) => ({ value: plugin, label: plugin.name, detail: [plugin.manufacturer, plugin.format === 'AudioUnit' ? 'AU' : plugin.format].filter(Boolean).join(' · ') })) },
+    // After the plugins themselves, since there are thousands: one group for each of Surge XT's categories.
+    ...categories.map((category) => ({
+      label: `Surge XT · ${category}`,
+      options: patches.filter((patch) => patch.category === category).map((patch) => ({ value: patch, label: patch.name, detail: patch.author }))
+    }))
   ]
   const name =
     instrument === 'plugin'
       ? track.plugin
-        ? pluginLabel(track.plugin)
+        ? track.pluginPatch
+          ? `${track.pluginPatch} · ${track.plugin.name}`
+          : pluginLabel(track.plugin)
         : 'Plugin'
       : instrument === 'soundfont'
         ? (track.soundfont?.name ?? 'SoundFont')
+        : instrument === 'sfz'
+          ? (track.sfz?.name ?? 'SFZ instrument')
         : INSTRUMENTS.find(([value]) => value === instrument)![1]
   return (
     <Section title="Instrument">
@@ -176,10 +213,19 @@ function InstrumentSection({ track }: { track: Track }): React.JSX.Element {
         groups={groups.filter((group) => group.options.length)}
         actions={choices.actions}
         onPick={(value) =>
-          typeof value === 'string' ? setInstrument(track.id, value) : 'description' in value ? setInstrumentPlugin(track.id, value) : setInstrumentSoundFont(track.id, value)
+          typeof value === 'string'
+            ? setInstrument(track.id, value)
+            : 'description' in value
+              ? setInstrumentPlugin(track.id, value)
+              : 'category' in value
+                ? void pickPatch(value)
+                : 'file' in value
+                  ? setInstrumentSfz(track.id, value)
+                  : setInstrumentSoundFont(track.id, value)
         }
       />
       {instrument === 'soundfont' && <SoundFontNote installed={presets !== null} />}
+      {instrument === 'sfz' && <SfzNote chosen={track.sfz} installed={sfz.some((each) => each.file === track.sfz?.file)} />}
       {instrument === 'synth' && track.synth && <SynthControls track={track} synth={track.synth} />}
       {instrument === 'sampler' && <SamplerControls track={track} sampler={track.sampler ?? DEFAULT_SAMPLER} />}
       {instrument === 'drums' && <p className="insp-note">Each note name is a drum: C kick, D snare, F♯ hat, A♯ open hat. The piano roll shows them all.</p>}
@@ -193,6 +239,13 @@ function SoundFontNote({ installed }: { installed: boolean }): React.JSX.Element
   if (!nativeEngine) return <p className="insp-note">SoundFont instruments need the native engine. With this one the track is silent.</p>
   if (!installed) return <p className="insp-note insp-error">The SoundFont is not installed, so this track is silent. Run `npm run fetch:content` to download it.</p>
   return <p className="insp-note">Played from MuseScore General, an open SoundFont (MIT licence).</p>
+}
+
+/** Says which pack an SFZ instrument is from, or why it cannot be heard. */
+function SfzNote({ chosen, installed }: { chosen: SfzInstrument | undefined; installed: boolean }): React.JSX.Element {
+  if (!nativeEngine) return <p className="insp-note">SFZ instruments need the native engine. With this one the track is silent.</p>
+  if (!installed) return <p className="insp-note insp-error">{chosen ? `“${chosen.pack}” is not installed, so this track is silent.` : 'No instrument is chosen, so this track is silent.'}</p>
+  return <p className="insp-note">From the SFZ pack “{chosen?.pack}”.</p>
 }
 
 function SynthControls({ track, synth }: { track: Track; synth: SynthParams }): React.JSX.Element {

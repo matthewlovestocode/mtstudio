@@ -251,8 +251,8 @@ export class Graph {
 
   /** Creates the track's instrument, and passes on changed settings and its sample. */
   private syncInstrument(strip: Strip, track: Track): void {
-    // A plugin or SoundFont instrument needs the native engine; here the track is silent.
-    if (track.instrument === 'plugin' || track.instrument === 'soundfont') {
+    // A plugin, SoundFont or SFZ instrument needs the native engine; here the track is silent.
+    if (track.instrument === 'plugin' || track.instrument === 'soundfont' || track.instrument === 'sfz') {
       strip.instrument?.node.disconnect()
       strip.instrument = null
       return

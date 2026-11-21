@@ -4,16 +4,14 @@
  * index, so the app can offer the presets without the engine having to load
  * two hundred megabytes of samples first.
  */
-import { app } from 'electron'
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SoundFontPreset } from '@shared/model'
+import { contentFolder } from './sfz'
 
-/** `STUDIO_SOUNDFONT`, or the file `npm run fetch:content` downloads (in a packaged app, the copy in its resources). */
+/** `STUDIO_SOUNDFONT`, or MuseScore General in the content folder. */
 export function soundFontPath(): string {
-  if (process.env.STUDIO_SOUNDFONT) return process.env.STUDIO_SOUNDFONT
-  const name = 'MuseScore_General.sf2'
-  return app.isPackaged ? join(process.resourcesPath, 'content', name) : join(app.getAppPath(), 'native', 'content', name)
+  return process.env.STUDIO_SOUNDFONT ?? join(contentFolder(), 'MuseScore_General.sf2')
 }
 
 let cached: { path: string; presets: SoundFontPreset[] | null } | null = null

@@ -50,6 +50,21 @@ export function Picker<T>(props: {
   )
 }
 
+/** The most rows drawn at once. */
+const MAX_ROWS = 300
+
+/** The groups cut off after `limit` options in all. */
+function cap<T>(groups: PickerGroup<T>[], limit: number): PickerGroup<T>[] {
+  const out: PickerGroup<T>[] = []
+  let left = limit
+  for (const group of groups) {
+    if (left <= 0) break
+    out.push(group.options.length <= left ? group : { ...group, options: group.options.slice(0, left) })
+    left -= group.options.length
+  }
+  return out
+}
+
 function PickerList<T>(props: {
   origin: Origin
   groups: PickerGroup<T>[]
@@ -79,7 +94,10 @@ function PickerList<T>(props: {
       }))
       .filter((group) => group.options.length)
   }, [props.groups, query])
-  const flat = groups.flatMap((group) => group.options)
+  const matches = groups.reduce((sum, group) => sum + group.options.length, 0)
+  // A list of thousands is not drawn whole: the first few hundred are, and typing brings the rest within reach.
+  const shown = cap(groups, MAX_ROWS)
+  const flat = shown.flatMap((group) => group.options)
   const at = Math.min(active, flat.length - 1)
 
   useEffect(() => {
@@ -118,7 +136,7 @@ function PickerList<T>(props: {
           }}
         />
         <div className="picker-list" role="listbox" ref={list}>
-          {groups.map((group, g) => (
+          {shown.map((group, g) => (
             <div key={group.label ?? g} role="group" aria-label={group.label}>
               {group.label && <div className="menu-head">{group.label}</div>}
               {group.options.map((option) => {
@@ -143,6 +161,7 @@ function PickerList<T>(props: {
             </div>
           ))}
           {flat.length === 0 && <div className="picker-none">Nothing matches “{query}”.</div>}
+          {matches > flat.length && <div className="picker-none">{matches - flat.length} more. Type to narrow the list.</div>}
         </div>
         {props.actions && props.actions.length > 0 && (
           <div className="picker-actions">

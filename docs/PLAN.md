@@ -114,6 +114,27 @@ is silent in the Web Audio engine, and the inspector says so.
   dropped: it does not apply a SoundFont's modulators, which MuseScore
   General's pianos are built on, and they came out 20 dB too quiet at
   middle velocities.
+- **SFZ (`native/src/Sfz.h`):** a track's instrument can be an SFZ
+  instrument, played by sfizz (BSD-2-Clause, built into the engine as
+  static libraries). A project names it by its path within the content
+  folder (`sfz/Pack/Instrument.sfz`), and nothing outside that folder is
+  opened. Each track has a player of its own; long samples are streamed
+  from disk, and an offline render makes the player read them as needed
+  instead (`SnapshotBuilder::offline`). The app lists what is installed by
+  walking `content/sfz` (`src/main/sfz.ts`); the folder under `sfz/` is the
+  pack, and each pack is a group in the instrument picker. SoundFont and
+  SFZ players share one interface (`Sampled.h`), so the engine's note and
+  mixing code does not tell them apart.
+- **Surge XT:** not part of the app, but made much of where it is
+  installed. It is hosted as any plugin instrument is; beyond that, the
+  app lists its patches itself (`src/main/surge.ts`, some 3,000 of them
+  under Surge's own folders) and offers them in the instrument picker by
+  category. A Surge patch file holds exactly what Surge saves as its
+  plugin state, so choosing one sets the track's instrument to Surge XT
+  with `Track.pluginState` made from the file, in the wrapping JUCE's
+  VST3 host uses; the engine needs to know nothing about patches. The
+  picker draws at most 300 rows of a long list and relies on typing to
+  narrow it.
 - **Content (`native/content`):** sound files are not in the repository.
   `manifest.json` lists each with where it comes from, its SHA-256, its
   licence and whom to credit; `npm run fetch:content` downloads and checks
@@ -125,6 +146,17 @@ is silent in the Web Audio engine, and the inspector says so.
   not; share-alike is decided case by case.
 
 Left over:
+- SFZ has only been played from a one-sample test instrument (pitch,
+  timing to the sample, release and failure cases checked offline). No
+  real pack is installed yet: the open ones are large (Salamander piano
+  about 700 MB, VSCO 2 CE about 2.3 GB as repositories), and
+  `fetch-content` only knows single files, not packs
+- sfizz is left at its own output level, which for the test instrument is
+  some 10 dB under the SoundFont's; to be judged against real instruments
+- Surge XT must be installed by the user, and found by a plugin scan,
+  before its patches are offered; shipping it with the app is a packaging
+  job. Only its VST3 is given patches this way. The track's label keeps
+  the patch's name even after the sound is changed in Surge's window
 - Levels have been checked (every General MIDI preset rises evenly with
   velocity at middle C, none is silent); tone has not been listened to
 - Two tracks on the same preset each read its samples in; whether
@@ -133,8 +165,8 @@ Left over:
   only been exercised through the offline render, which shares the mixing
   but not the note commands
 - The piano roll shows note names, not drum names, for a SoundFont drum kit
-- SFZ instruments (sfizz), a library to browse and download content from,
-  and Surge XT as a bundled synth
+- A library to browse and download content from, and Surge XT as a
+  bundled synth
 
 ### Web Audio engine (`engine/WebAudioEngine.ts`)
 

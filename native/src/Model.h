@@ -91,7 +91,7 @@ struct Strip
     /** Smoothed send levels, by position in the track's list of sends. */
     static constexpr int maxSends = 8;
     struct SendState { uint32_t bus = 0; float gain = 0; } sends[maxSends];
-    /** For a track whose instrument is a plugin or a SoundFont: the notes it holds, and the messages for it in this chunk. */
+    /** For a track whose instrument is sent its notes (see `TrackSnapshot::takesEvents`): those it holds, and the messages for it in this chunk. */
     static constexpr int maxPluginNotes = 128, maxPluginEvents = 512;
     PluginNote pluginNotes[maxPluginNotes];
     int pluginNoteCount = 0;
@@ -160,7 +160,7 @@ inline double automationValue (const std::vector<AutoPoint>& points, double tick
 }
 
 struct PluginSlot;
-class SoundFontPlayer;
+class SampledInstrument;
 /** How many frames late a plugin's output is, by its own account. Message thread. */
 int pluginLatency (const PluginSlot& plugin);
 
@@ -233,10 +233,10 @@ struct TrackSnapshot
     Instrument instrument = Instrument::none;
     /** The instrument, when it is a hosted plugin. */
     std::shared_ptr<PluginSlot> plugin;
-    /** The instrument, when it is a SoundFont preset. It is sent notes as a plugin is. */
-    std::shared_ptr<SoundFontPlayer> soundfont;
-    /** Whether the instrument is sent notes as messages (a plugin or a SoundFont) rather than played by the engine's own voices. */
-    bool takesEvents() const { return instrument == Instrument::plugin || instrument == Instrument::soundfont; }
+    /** The instrument, when it is played from sound content: a SoundFont preset or an SFZ instrument. It is sent notes as a plugin is. */
+    std::shared_ptr<SampledInstrument> sampled;
+    /** Whether the instrument is sent notes as messages (a plugin, a SoundFont, an SFZ) rather than played by the engine's own voices. */
+    bool takesEvents() const { return plugin != nullptr || sampled != nullptr; }
     SynthParams params;
     SamplerParams sampler;
     /** Keeps the sampler's sample alive for as long as this snapshot is. */
@@ -287,6 +287,11 @@ class SnapshotBuilder
 public:
     /** `rate` is the engine's sample rate, which sizes the effects' delay lines. */
     std::shared_ptr<const Snapshot> build (const juce::var& project, const AssetStore& assets, double rate, const PluginLookup& plugins = {});
+    /**
+     * Set for a render that runs faster than real time: instruments that stream
+     * their samples from disk are then made to read them as they are needed.
+     */
+    bool offline = false;
     /** The strip for a track id, or null. Control thread only. */
     Strip* find (const juce::String& trackId) const;
     const std::vector<std::pair<juce::String, std::shared_ptr<Strip>>>& strips() const { return current; }
@@ -300,8 +305,8 @@ private:
     /** Effects in use, by track id and effect id, so each keeps its tail when the project is edited. */
     std::map<juce::String, std::shared_ptr<EffectUnit>> effects;
     std::vector<StretchJob> wanted;
-    /** SoundFont players by track id, kept so their notes ring on across edits. */
-    std::map<juce::String, std::shared_ptr<SoundFontPlayer>> soundfonts;
+    /** SoundFont and SFZ players by track id, kept so their notes ring on across edits. */
+    std::map<juce::String, std::shared_ptr<SampledInstrument>> sampledPlayers;
     /** Compensation delays by track id, kept so they hold their audio across edits. */
     std::map<juce::String, std::shared_ptr<CompDelay>> delays;
     int lastLatency = 0;

@@ -7,7 +7,9 @@ import { usedAssetIds, type Project } from '@shared/model'
 import type { EngineKind } from '@shared/nativeEngine'
 import * as audioFiles from './audioFiles'
 import { nativeEngineBuilt, nativeEnginePath, startNativeEngine } from './nativeEngine'
+import { sfzInstruments } from './sfz'
 import { soundFontPresets } from './soundfont'
+import { surgePatches, surgePatchState } from './surge'
 
 const PROJECT_FILTERS = [{ name: `${APP_NAME} Project`, extensions: ['studio'] }]
 const ALLOWED_PERMISSIONS = ['media', 'midi', 'midiSysex']
@@ -275,6 +277,11 @@ ipcMain.handle('autosave:write', async (_event, data: string | null): Promise<vo
 ipcMain.handle('autosave:read', (): Promise<string | null> => readFile(autosavePath(), 'utf8').catch(() => null))
 
 ipcMain.handle('soundfont:presets', () => soundFontPresets())
+
+ipcMain.handle('sfz:instruments', () => sfzInstruments())
+
+ipcMain.handle('surge:patches', () => surgePatches())
+ipcMain.handle('surge:patchState', (_event, path: string) => surgePatchState(String(path)))
 
 ipcMain.on('window:document', (_event, state: { title: string; dirty: boolean }) => {
   documentDirty = state.dirty
