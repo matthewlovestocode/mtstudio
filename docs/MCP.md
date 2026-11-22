@@ -1,6 +1,6 @@
 # Letting an assistant work in mtstudio
 
-mtstudio can let an assistant such as Claude work on the open project, over the [Model Context Protocol](https://modelcontextprotocol.io) (MCP). You ask in words ("add a pad under the chords from bar 5", "make the bass line busier in the second half"); the assistant reads the project and changes it, and you watch the window change as it goes.
+mtstudio can let an assistant such as Claude work on the open project, over the [Model Context Protocol](https://modelcontextprotocol.io) (MCP). You ask in words ("put a drill pattern on the drums with a bass line that locks to it", "give the keys an electric piano and some reverb", "make the bass line busier in the second half"); the assistant reads the project and changes it, and you watch the window change as it goes.
 
 It is off until you turn it on.
 
@@ -31,6 +31,14 @@ Access stays on, across restarts, until you choose **Turn Off** in the same wind
 | `set_clip_notes`, `add_notes`, `remove_notes` | Replaces a clip's notes, adds to them, or deletes some |
 | `set_tempo`, `set_time_signature`, `set_key`, `set_loop` | Sets the tempo, time signature and key the song starts in, and the loop |
 | `transport` | Plays, stops, and moves the playhead |
+| `get_track` | Reads one track in full: instrument, effects, sends, automation, and which note is which drum |
+| `list_instruments`, `set_instrument` | Searches every instrument the app has (built in, General MIDI, SFZ, Surge XT, plugins) and gives one to a track |
+| `set_synth` | Sets the built-in synth's wave, envelope and filter |
+| `add_effect`, `update_effect`, `remove_effect` | Adds an EQ, compressor, delay or reverb; changes its settings or bypasses it; removes it |
+| `set_send` | Sends a track to a bus at a level |
+| `set_automation` | Writes a volume or pan curve |
+| `list_patterns`, `apply_pattern` | Finds a drum pattern by style or name and writes it into a clip, with the kit its style calls for |
+| `list_parts`, `apply_part` | Finds a bass line, chord part or synth figure and writes it into a clip, following the song's chords |
 | `undo`, `redo` | Steps back and forward through the project's changes |
 
 Positions and lengths are in beats (quarter notes), so a bar of 4/4 is four beats; pitches are MIDI note numbers.
@@ -39,10 +47,9 @@ Each call is one step of undo, the same undo as your own edits: **Edit › Undo*
 
 ## What it cannot do yet
 
-- Choose instruments, add effects or sends, or draw automation
-- Use the drum patterns and the bass, chord and synth parts
 - Save, open or export, or install instrument packs
 - Record
+- Change a plugin's settings, or the sampler's sample
 - Hear anything. It works from the notes, and you are the one who listens.
 
 ## What keeps it safe

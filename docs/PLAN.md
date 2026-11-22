@@ -181,11 +181,14 @@ Left over:
 - Stage 1 (done): read the project and a clip (with its chords), tracks,
   clips, notes, tempo, time signature, key, loop, transport, undo and redo.
   Callers work in beats; the project stays in ticks
-- Stage 2 (next): instruments, mixer, effects, sends, automation, and the
-  pattern and part libraries. Stage 3: save, open, export, packs, a
-  screenshot of the window
-- Tested with requests made by hand, not yet with Claude Code itself. The
-  menu item is in the native menu only, not the in-window menus
+- Stage 2 (done): one track in full, the instrument library (`loadLibrary`
+  in `library.ts`, the same list the browser shows) and choosing from it,
+  the synth's settings, effects, sends, automation, and the pattern and part
+  libraries, applied as the step sequencer and piano roll apply them. Not
+  tried: Surge XT patches and plugins, which need a plugin scan
+- Stage 3 (next): save, open, export, packs, a screenshot of the window
+- Tested with requests made by hand; the user has connected Claude Code to
+  stage 1. The menu item is in the native menu only, not the in-window menus
 
 ### Instruments and sound content
 

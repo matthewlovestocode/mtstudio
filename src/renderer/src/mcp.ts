@@ -5,15 +5,39 @@
  *
  * Callers speak in beats (quarter notes); the project is kept in ticks.
  */
+import { EFFECTS, effectParam, makeEffect } from '@shared/effects'
 import { keyAt } from '@shared/keymap'
-import { newId, PPQ, type Clip, type MidiClip, type Note, type Project, type Track } from '@shared/model'
+import { AUTOMATION_RANGE, DEFAULT_SYNTH, newId, PPQ, type AutomationTarget, type BuiltInEffectType, type Clip, type MidiClip, type Note, type Project, type Track, type Waveform } from '@shared/model'
 import type { McpAnswer } from '@shared/mcp'
 import { keyName, noteName, SCALES, type Key, type ScaleId } from '@shared/theory'
 import { timeMap } from '@shared/timemap'
-import { isDrumTrack } from './drums'
+import { isDrumTrack, kitFor, kitNameFor, patternNotes, PATTERNS, type Pattern } from './drums'
 import { engine } from './engine'
 import { barChords } from './harmony'
-import { duplicateClips, findClip, makeTrack, placeClips, removeClips, removeTrack, replaceClip, setKey, setLoop, setMeter, setTempo, updateClip, updateTrack } from './state/actions'
+import { currentItemId, loadLibrary } from './library'
+import { partNotes, PARTS, roomFor, type Part } from './parts'
+import { bridge } from './platform'
+import { DRUM_BANK } from './soundfont'
+import {
+  duplicateClips,
+  findClip,
+  makeTrack,
+  placeClips,
+  removeClips,
+  removeEffect,
+  removeTrack,
+  replaceClip,
+  setAutomation,
+  setInstrumentSoundFont,
+  setKey,
+  setLoop,
+  setMeter,
+  setSend,
+  setTempo,
+  updateClip,
+  updateEffect,
+  updateTrack
+} from './state/actions'
 import { useStudio } from './state/store'
 
 type Args = Record<string, unknown>
@@ -175,7 +199,263 @@ function describeClip(args: Args): unknown {
 
 const done = (what: string, more: Record<string, unknown> = {}): unknown => ({ done: what, ...more })
 
+// ── Sound: instruments, effects, sends, automation ───────────────────────
+
+function effectOf(track: Track, id: unknown): NonNullable<Track['effects']>[number] {
+  const effect = (track.effects ?? []).find((each) => each.id === id)
+  if (!effect) throw new Refused(`"${track.name}" has no effect with the id "${String(id)}". get_track lists them.`)
+  return effect
+}
+
+/** Parameters as a caller gives them, checked against what that kind of effect has. */
+function effectParams(type: BuiltInEffectType, given: unknown): Record<string, number> {
+  if (given === undefined || given === null) return {}
+  if (typeof given !== 'object' || Array.isArray(given)) throw new Refused('"params" must be an object of numbers.')
+  const defs = EFFECTS[type].params
+  const out: Record<string, number> = {}
+  for (const [key, value] of Object.entries(given as Args)) {
+    const def = defs.find((each) => each.key === key)
+    if (!def) throw new Refused(`${EFFECTS[type].label} has no "${key}". It has: ${defs.map((each) => each.key).join(', ')}.`)
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < def.min || value > def.max) throw new Refused(`${EFFECTS[type].label}'s "${key}" runs from ${def.min} to ${def.max}${def.unit === '%' ? '' : ` ${def.unit}`}.`)
+    out[key] = value
+  }
+  return out
+}
+
+function describeTrack(args: Args): unknown {
+  const track = trackOf(args)
+  const p = project()
+  const name = (id: string): string => p.tracks.find((each) => each.id === id)?.name ?? id
+  const kind = track.instrument ?? 'synth'
+  const drums = track.kind === 'midi' && isDrumTrack(track)
+  return {
+    id: track.id,
+    name: track.name,
+    kind: track.kind === 'midi' ? 'instrument' : track.kind,
+    volume: track.volume,
+    pan: track.pan,
+    mute: track.mute,
+    solo: track.solo,
+    ...(track.kind === 'midi'
+      ? {
+          instrument: instrumentOf(track),
+          instrument_id: currentItemId(track, []),
+          ...(kind === 'synth' ? { synth: track.synth ?? DEFAULT_SYNTH } : {}),
+          drums,
+          ...(drums ? { drum_notes: Object.fromEntries(Object.entries(kitFor(track).names).map(([pitch, each]) => [pitch, each])) } : {})
+        }
+      : {}),
+    effects: (track.effects ?? []).map((effect) => ({
+      id: effect.id,
+      type: effect.type,
+      ...(effect.type === 'plugin' ? { plugin: effect.plugin?.name } : { params: Object.fromEntries(EFFECTS[effect.type].params.map((def) => [def.key, effectParam(effect, def.key)])) }),
+      bypass: effect.bypass
+    })),
+    sends: (track.sends ?? []).map((send) => ({ bus_id: send.busId, bus: name(send.busId), level: send.level })),
+    automation: Object.fromEntries(
+      (['volume', 'pan'] as AutomationTarget[]).filter((target) => track.automation?.[target]?.length).map((target) => [target, track.automation![target]!.map((point) => ({ at: beats(point.tick), value: point.value }))])
+    ),
+    clips: track.clips.length
+  }
+}
+
+/** Every word of the search must be somewhere in the text. */
+const matches = (search: string | undefined, ...texts: (string | undefined)[]): boolean => {
+  if (!search) return true
+  const hay = texts.join(' ').toLowerCase()
+  return search
+    .toLowerCase()
+    .split(/\s+/)
+    .every((word) => hay.includes(word))
+}
+const same = (a: string | undefined, b: string): boolean => a !== undefined && a.trim().toLowerCase() === b.toLowerCase()
+
+/** The pattern or part of a name, where there is exactly one. */
+function oneNamed<T extends { name: string; style: string }>(all: T[], name: string | undefined, style: string | undefined, what: string, lister: string): T {
+  if (!name) throw new Refused(`Which ${what}? ${lister} lists them.`)
+  const found = all.filter((each) => same(name, each.name) && (!style || same(style, each.style)))
+  if (found.length === 1) return found[0]
+  if (found.length > 1) throw new Refused(`There is a ${what} called "${name}" in more than one style (${found.map((each) => each.style).join(', ')}). Say which with "style".`)
+  const near = all.filter((each) => matches(name, each.name, each.style)).slice(0, 8)
+  throw new Refused(`There is no ${what} called "${name}"${style ? ` in ${style}` : ''}.${near.length ? ` Near it: ${near.map((each) => `"${each.name}" (${each.style})`).join(', ')}.` : ` ${lister} lists them.`}`)
+}
+
+const counts = <T>(all: T[], key: (each: T) => string): Record<string, number> => {
+  const out: Record<string, number> = {}
+  for (const each of all) out[key(each)] = (out[key(each)] ?? 0) + 1
+  return out
+}
+
+const SOUND_TOOLS: Record<string, (args: Args) => unknown | Promise<unknown>> = {
+  get_track: describeTrack,
+
+  async list_instruments(args) {
+    const search = text(args, 'search')
+    const family = text(args, 'family')
+    const source = text(args, 'source')
+    const limit = number(args, 'limit', 1, 200) ?? 40
+    const library = await loadLibrary()
+    const found = library.items.filter((each) => (!family || same(family, each.family)) && (!source || same(source, each.source)) && matches(search, each.name, each.detail, each.family))
+    return {
+      matched: found.length,
+      shown: Math.min(found.length, limit),
+      ...(library.nativeOnly ? { note: 'mtstudio is running on its Web Audio engine, which plays only the three built-in instruments.' } : {}),
+      ...(found.length > limit ? { more: 'Narrow it with search, family or source to see the rest.' } : {}),
+      instruments: found.slice(0, limit).map((each) => ({ id: each.id, name: each.name, family: each.family, source: each.source, detail: each.detail }))
+    }
+  },
+
+  async set_instrument(args) {
+    const track = trackOf(args)
+    if (track.kind !== 'midi') throw new Refused(`"${track.name}" is not an instrument track.`)
+    const id = text(args, 'instrument_id')
+    const library = await loadLibrary()
+    const item = library.items.find((each) => each.id === args.instrument_id) ?? library.items.find((each) => same(id, each.name))
+    if (!item) throw new Refused(`There is no instrument with the id "${String(args.instrument_id)}". list_instruments finds them.`)
+    if (library.nativeOnly && item.source !== 'Built in') throw new Refused('mtstudio is running on its Web Audio engine, which plays only the three built-in instruments.')
+    await item.apply(track.id)
+    return done(`"${track.name}" now plays ${item.name} (${item.source}).`)
+  },
+
+  set_synth(args) {
+    const track = trackOf(args)
+    if (track.kind !== 'midi' || (track.instrument ?? 'synth') !== 'synth') throw new Refused(`"${track.name}" does not play the built-in synth. set_instrument with "builtin:synth" gives it one.`)
+    const patch: Record<string, number | string> = {}
+    if (args.wave !== undefined) {
+      if (!['sine', 'triangle', 'sawtooth', 'square'].includes(args.wave as string)) throw new Refused('"wave" must be sine, triangle, sawtooth or square.')
+      patch.wave = args.wave as Waveform
+    }
+    const ranges: Record<string, [number, number]> = { attack: [0.001, 1], decay: [0.01, 2], sustain: [0, 1], release: [0.01, 3], cutoff: [80, 16000], resonance: [0.1, 20] }
+    for (const [key, [min, max]] of Object.entries(ranges)) {
+      const value = number(args, key, min, max)
+      if (value !== undefined) patch[key] = value
+    }
+    if (Object.keys(patch).length === 0) throw new Refused('Nothing to change was given.')
+    const synth = { ...(track.synth ?? DEFAULT_SYNTH), ...patch }
+    updateTrack(track.id, { synth })
+    return done(`Changed the synth on "${track.name}".`, { synth })
+  },
+
+  add_effect(args) {
+    const track = trackOf(args)
+    const type = args.type as BuiltInEffectType
+    if (!(typeof type === 'string' && type in EFFECTS)) throw new Refused(`"type" must be one of: ${Object.keys(EFFECTS).join(', ')}.`)
+    const effect = makeEffect(type, effectParams(type, args.params))
+    useStudio.getState().edit((p) => ({ ...p, tracks: p.tracks.map((each) => (each.id === track.id ? { ...each, effects: [...(each.effects ?? []), effect] } : each)) }))
+    return done(`Added ${EFFECTS[type].label} to "${track.name}".`, { effect_id: effect.id, params: effect.params })
+  },
+
+  update_effect(args) {
+    const track = trackOf(args)
+    const effect = effectOf(track, args.effect_id)
+    const bypass = flag(args, 'bypass')
+    if (effect.type === 'plugin' && args.params !== undefined) throw new Refused("A plugin's settings are changed in its own window.")
+    const params = effect.type === 'plugin' ? {} : effectParams(effect.type, args.params)
+    if (bypass === undefined && Object.keys(params).length === 0) throw new Refused('Nothing to change was given.')
+    updateEffect(track.id, effect.id, { ...(bypass === undefined ? {} : { bypass }), ...(Object.keys(params).length ? { params: { ...effect.params, ...params } } : {}) })
+    return done(`Changed the ${effect.type === 'plugin' ? 'plugin' : EFFECTS[effect.type].label} on "${track.name}".`)
+  },
+
+  remove_effect(args) {
+    const track = trackOf(args)
+    const effect = effectOf(track, args.effect_id)
+    removeEffect(track.id, effect.id)
+    return done(`Removed the ${effect.type === 'plugin' ? 'plugin' : EFFECTS[effect.type].label} from "${track.name}".`)
+  },
+
+  set_send(args) {
+    const track = trackOf(args)
+    const bus = trackOf(args, 'bus_id')
+    if (bus.kind !== 'bus') throw new Refused(`"${bus.name}" is not a bus. add_track with the kind "bus" makes one.`)
+    if (track.kind === 'bus') throw new Refused('A bus cannot be sent to a bus.')
+    const level = need(number(args, 'level', 0, 1), 'level')
+    setSend(track.id, bus.id, level)
+    return done(level > 0 ? `"${track.name}" is sent to "${bus.name}" at ${level}.` : `"${track.name}" is no longer sent to "${bus.name}".`)
+  },
+
+  set_automation(args) {
+    const track = trackOf(args)
+    const target = args.target as AutomationTarget
+    if (target !== 'volume' && target !== 'pan') throw new Refused('"target" must be "volume" or "pan".')
+    if (!Array.isArray(args.points)) throw new Refused('"points" must be a list.')
+    if (args.points.length > 2000) throw new Refused('At most 2000 points.')
+    const range = AUTOMATION_RANGE[target]
+    const points = args.points.map((each, index) => {
+      const given = (each ?? {}) as Args
+      if (typeof given.at !== 'number' || !Number.isFinite(given.at) || given.at < 0) throw new Refused(`Point ${index + 1}: "at" must be 0 or more beats.`)
+      if (typeof given.value !== 'number' || !Number.isFinite(given.value) || given.value < range.min || given.value > range.max) throw new Refused(`Point ${index + 1}: ${range.label.toLowerCase()} runs from ${range.min} to ${range.max}.`)
+      return { id: newId(), tick: ticks(given.at), value: given.value }
+    })
+    setAutomation(track.id, target, points)
+    return done(points.length ? `"${track.name}" has a ${target} curve of ${points.length} points, which it follows while playing.` : `Removed the ${target} curve from "${track.name}".`)
+  },
+
+  list_patterns(args) {
+    const style = text(args, 'style')
+    const search = text(args, 'search')
+    if (!style && !search) return { patterns: PATTERNS.length, styles: counts(PATTERNS, (each) => each.style), next: 'Give a style or words to search for to see the patterns.' }
+    const found = PATTERNS.filter((each) => (!style || same(style, each.style)) && matches(search, each.name, each.style, each.group))
+    if (!found.length && style && !PATTERNS.some((each) => same(style, each.style))) throw new Refused(`There is no style called "${style}". The styles are: ${Object.keys(counts(PATTERNS, (each) => each.style)).join(', ')}.`)
+    return { matched: found.length, patterns: found.slice(0, 120).map((each) => ({ name: each.name, style: each.style, ...(each.group ? { group: each.group } : {}), bpm: each.bpm, kit: kitNameFor(each) })) }
+  },
+
+  async apply_pattern(args) {
+    const { track, clip } = midiClipOf(args.clip_id)
+    if (!isDrumTrack(track)) throw new Refused(`"${track.name}" is not a drum track, so a pattern's notes would not land on drums. Give it a drum kit first (list_instruments with the family "Drums"), or use apply_part for a pitched instrument.`)
+    const pattern: Pattern = oneNamed(PATTERNS, text(args, 'pattern'), text(args, 'style'), 'pattern', 'list_patterns')
+    const grow = flag(args, 'grow') ?? true
+    const matchKit = flag(args, 'match_kit') ?? true
+    // As the step sequencer does it: a track on the drum machine or a SoundFont kit is moved to the pattern's kit; one playing anything else was put there by hand and stays.
+    const instrument = track.instrument ?? 'synth'
+    const onSoundFont = instrument === 'soundfont' && track.soundfont?.bank === DRUM_BANK
+    const kits = matchKit && (instrument === 'drums' || onSoundFont) && bridge?.nativeEngine ? (((await bridge.soundFontPresets().catch(() => null)) ?? []).filter((each) => each.bank === DRUM_BANK)) : []
+    const wanted = kits.find((each) => each.name === kitNameFor(pattern))
+    const moving = wanted && !(onSoundFont && track.soundfont!.program === wanted.program)
+    const gesture = `mcp-${newId()}`
+    if (moving) setInstrumentSoundFont(track.id, wanted, gesture)
+    const p = project()
+    const now = midiClipOf(clip.id).clip
+    const length = grow ? roomFor(p, track, now) : now.length
+    const notes = patternNotes(pattern, moving ? kitFor({ ...track, instrument: 'soundfont', soundfont: wanted }) : kitFor(track), length)
+    replaceClip({ ...now, length, notes }, gesture)
+    useStudio.getState().endGesture()
+    return done(`Wrote "${pattern.name}" (${pattern.style}) into "${clip.name}": ${notes.length} hits over ${beats(length)} beats.`, {
+      suits_bpm: pattern.bpm,
+      tempo_now: p.bpm,
+      ...(moving ? { kit: `The track now plays the ${wanted.name} kit.` } : {})
+    })
+  },
+
+  list_parts(args) {
+    const style = text(args, 'style')
+    const kind = text(args, 'kind')
+    const search = text(args, 'search')
+    if (!style && !kind && !search) return { parts: PARTS.length, styles: counts(PARTS, (each) => each.style), kinds: counts(PARTS, (each) => each.kind), next: 'Give a style, a kind or words to search for to see the parts.' }
+    const found = PARTS.filter((each) => (!style || same(style, each.style)) && (!kind || same(kind, each.kind)) && matches(search, each.name, each.style, each.group))
+    if (!found.length && style && !PARTS.some((each) => same(style, each.style))) throw new Refused(`There is no style called "${style}". The styles are: ${Object.keys(counts(PARTS, (each) => each.style)).join(', ')}.`)
+    return { matched: found.length, parts: found.map((each) => ({ name: each.name, style: each.style, kind: each.kind, group: each.group, bpm: each.bpm })) }
+  },
+
+  apply_part(args) {
+    const { track, clip } = midiClipOf(args.clip_id)
+    if (isDrumTrack(track)) throw new Refused(`"${track.name}" is a drum track; parts are for pitched instruments. Use apply_pattern here.`)
+    const part: Part = oneNamed(PARTS, text(args, 'part'), text(args, 'style'), 'part', 'list_parts')
+    const grow = flag(args, 'grow') ?? true
+    const p = project()
+    const length = grow ? roomFor(p, track, clip) : clip.length
+    const notes = partNotes(part, p, track, clip, length)
+    replaceClip({ ...clip, length, notes })
+    const pitches = notes.map((note) => note.pitch)
+    return done(`Wrote "${part.name}" (${part.style}, ${part.kind}) into "${clip.name}": ${notes.length} notes over ${beats(length)} beats.`, {
+      ...(pitches.length ? { range: `${noteName(Math.min(...pitches), keyAt(p, clip.start))} to ${noteName(Math.max(...pitches), keyAt(p, clip.start))}` } : {}),
+      suits_bpm: part.bpm,
+      tempo_now: p.bpm
+    })
+  }
+}
+
 const TOOLS: Record<string, (args: Args) => unknown | Promise<unknown>> = {
+  ...SOUND_TOOLS,
   get_project: describeProject,
   get_clip: describeClip,
 

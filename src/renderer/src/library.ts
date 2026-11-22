@@ -4,7 +4,7 @@
  * XT's patches and hosted plugins. Each knows how to make itself a track's
  * instrument, so the browser need not know where it came from.
  */
-import type { Id, PluginRef, Track } from '@shared/model'
+import type { Id, PluginRef, SfzInstrument, SoundFontPreset, SurgePatch, Track } from '@shared/model'
 import { nativeEngine } from './engine'
 import { bridge } from './platform'
 import { usePlugins } from './plugins'
@@ -111,10 +111,22 @@ export interface Library {
 }
 
 export function useLibrary(): Library {
-  const presets = useSoundFontPresets()
-  const sfz = useSfzInstruments()
-  const patches = useSurgePatches()
-  const plugins = oneFormatEach((usePlugins().plugins ?? []).filter((plugin) => plugin.instrument))
+  return buildLibrary(useSoundFontPresets() ?? null, useSfzInstruments(), useSurgePatches(), usePlugins().plugins ?? [])
+}
+
+/** The library as it stands now, asked for afresh: for a caller that is not a component (see mcp.ts). */
+export async function loadLibrary(): Promise<Library> {
+  const [presets, sfz, patches, found] = await Promise.all([
+    (bridge?.soundFontPresets() ?? Promise.resolve(null)).catch(() => null),
+    (bridge?.sfzInstruments() ?? Promise.resolve([])).catch(() => []),
+    (bridge?.surgePatches() ?? Promise.resolve([])).catch(() => []),
+    (nativeEngine?.plugins(false) ?? Promise.resolve(null)).catch(() => null)
+  ])
+  return buildLibrary(presets, sfz, patches, found?.plugins ?? [])
+}
+
+function buildLibrary(presets: SoundFontPreset[] | null, sfz: SfzInstrument[], patches: SurgePatch[], scanned: PluginRef[]): Library {
+  const plugins = oneFormatEach(scanned.filter((plugin) => plugin.instrument))
   const surge = plugins.find((plugin) => plugin.name === 'Surge XT' && plugin.format === 'VST3')
 
   const items: LibraryItem[] = [
