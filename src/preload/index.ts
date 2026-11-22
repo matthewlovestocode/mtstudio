@@ -49,6 +49,14 @@ const bridge: StudioBridge = {
   onMenuCommand: (handler) => {
     ipcRenderer.on('menu', (_event, command: MenuCommand) => handler(command))
   },
+  onMcpCall: (handler) => {
+    ipcRenderer.on('mcp:call', (_event, call: { id: number; name: string; args: unknown }) => {
+      void handler(call.name, call.args).then(
+        (answer) => ipcRenderer.send('mcp:answer', call.id, answer),
+        (error) => ipcRenderer.send('mcp:answer', call.id, { ok: false, error: String(error) })
+      )
+    })
+  },
   setDocumentState: (state) => ipcRenderer.send('window:document', state),
   nativeEngine
 }

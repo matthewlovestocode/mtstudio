@@ -7,6 +7,7 @@ import { usedAssetIds, type Project } from '@shared/model'
 import type { EngineKind } from '@shared/nativeEngine'
 import * as audioFiles from './audioFiles'
 import { fetchMissingContent } from './firstRun'
+import { showMcpDialog, startMcp } from './mcp'
 import { nativeEngineBuilt, nativeEnginePath, startNativeEngine } from './nativeEngine'
 import { contentPacks, installPack, removePack } from './packs'
 import { sfzInstruments } from './sfz'
@@ -119,6 +120,7 @@ function buildMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' } as MenuItemConstructorOptions] : []),
     ...MENUS.map((section) => ({ label: section.label, submenu: [...commandItems(section), ...(extras[section.label] ?? [])] })),
+    { label: 'Assistant', submenu: [{ label: 'Assistant Access…', click: () => void showMcpDialog() }] },
     { role: 'viewMenu' },
     { role: 'windowMenu' }
   ]
@@ -325,6 +327,7 @@ void app.whenReady().then(async () => {
     console.warn(`STUDIO_ENGINE="${process.env.STUDIO_ENGINE}" is not an engine (use "web" or "native"); using Web Audio.`)
   }
 
+  await startMcp(() => mainWindow)
   buildMenu()
   createWindow()
   app.on('activate', () => {

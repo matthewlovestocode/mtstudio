@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { engine, nativeEngine } from './engine'
+import { runMcpTool } from './mcp'
 import { initMidiInput } from './midiInput'
 import * as platform from './platform'
 import { APP_NAME } from '@shared/menu'
@@ -39,6 +40,7 @@ engine.onTransport((playing) => useStudio.setState(playing ? { playing } : { pla
 initMidiInput()
 void initAutosave()
 bridge?.onMenuCommand(runCommand)
+bridge?.onMcpCall(runMcpTool)
 
 // Handy in the dev tools console.
 if (import.meta.env.DEV) Object.assign(window, { __studio: { engine, store: useStudio, platform } })

@@ -169,6 +169,24 @@ Left over:
 - Left: glide between notes for 808 slides; an instrument per style, as
   the drum kits have.
 
+### Assistant access (`src/main/mcp.ts`, `src/shared/mcp.ts`, `src/renderer/src/mcp.ts`)
+
+- An MCP server inside the app, off until switched on under Assistant in the
+  menu: HTTP on 127.0.0.1:47821, a bearer token, JSON-RPC answered with JSON
+  (no session, no stream). Requests from web pages (an Origin header) are
+  refused. `docs/MCP.md` is the user's guide
+- The tool list is shared; the main process serves it and passes each call to
+  the window, which carries it out through `state/actions.ts`, so every call
+  is seen as it happens and is one step of undo
+- Stage 1 (done): read the project and a clip (with its chords), tracks,
+  clips, notes, tempo, time signature, key, loop, transport, undo and redo.
+  Callers work in beats; the project stays in ticks
+- Stage 2 (next): instruments, mixer, effects, sends, automation, and the
+  pattern and part libraries. Stage 3: save, open, export, packs, a
+  screenshot of the window
+- Tested with requests made by hand, not yet with Claude Code itself. The
+  menu item is in the native menu only, not the in-window menus
+
 ### Instruments and sound content
 
 The native engine is where instruments are heading: new ones are written

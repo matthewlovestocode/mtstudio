@@ -91,6 +91,10 @@ npm run dev
 
 This runs on the browser's own audio. The built-in synth, sampler and drum machine work, but there are no SoundFont, SFZ or plugin instruments, no drum kits by style and no mic recording.
 
+## Working with Claude
+
+mtstudio can let an assistant such as Claude read and change the open project: tracks, clips, notes, tempo, key and the transport. Turn it on under **Assistant › Assistant Access…**, copy the command it gives you, and run it in a terminal to connect Claude Code. It is off by default, reachable only from your own computer, and every change can be undone. See [the guide](docs/MCP.md).
+
 ## Optional extras
 
 - **More instruments.** The browser inside the app offers free SFZ packs (basses, pianos, drums and others) and installs them for you. Each is a few hundred megabytes.

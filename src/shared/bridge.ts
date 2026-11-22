@@ -2,6 +2,7 @@
 import type { NativeEngineBridge } from './nativeEngine'
 import type { StreamInfo } from './pcm'
 
+import type { McpAnswer } from './mcp'
 import type { MenuCommand } from './menu'
 import type { SfzInstrument, SoundFontPreset, SurgePatch } from './model'
 
@@ -108,6 +109,8 @@ export interface StudioBridge {
   /** Absolute path of a File chosen or dropped by the user. */
   pathForFile(file: File): string
   onMenuCommand(handler: (command: MenuCommand) => void): void
+  /** Calls from an assistant (see mcp.ts): the handler carries each out and its answer is sent back. */
+  onMcpCall(handler: (name: string, args: unknown) => Promise<McpAnswer>): void
   setDocumentState(state: { title: string; dirty: boolean }): void
   /** The link to the native audio engine; null when the app is running on the Web Audio engine. */
   nativeEngine: NativeEngineBridge | null
