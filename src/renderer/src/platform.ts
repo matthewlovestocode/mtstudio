@@ -231,12 +231,19 @@ function parseProject(json: string): Project | null {
 }
 
 function load(json: string, path: string | null): void {
+  if (!showOpened(json, path)) window.alert(`That file is not a ${APP_NAME} project.`)
+}
+
+/** Shows a project read from disk, in place of the one that is open. False if it is not a project. */
+export function showOpened(json: string, path: string | null): boolean {
   const project = parseProject(json)
-  if (!project) {
-    window.alert(`That file is not a ${APP_NAME} project.`)
-    return
-  }
-  show(project, path)
+  if (project) show(project, path)
+  return !!project
+}
+
+/** Shows an empty project in place of the one that is open, without asking. */
+export function showNewProject(): void {
+  show(emptyProject(), null)
 }
 
 function show(project: Project, path: string | null): void {
@@ -248,7 +255,7 @@ function show(project: Project, path: string | null): void {
 
 export function newProject(): void {
   if (!confirmDiscard()) return
-  show(emptyProject(), null)
+  showNewProject()
 }
 
 export async function openProject(): Promise<void> {

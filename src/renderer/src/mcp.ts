@@ -16,8 +16,8 @@ import { engine } from './engine'
 import { barChords } from './harmony'
 import { currentItemId, loadLibrary } from './library'
 import { partNotes, PARTS, roomFor, type Part } from './parts'
-import { bridge } from './platform'
-import { DRUM_BANK } from './soundfont'
+import { bridge, saveProject, showNewProject, showOpened } from './platform'
+import { DRUM_BANK, refreshSfzInstruments } from './soundfont'
 import {
   duplicateClips,
   findClip,
@@ -454,8 +454,136 @@ const SOUND_TOOLS: Record<string, (args: Args) => unknown | Promise<unknown>> = 
   }
 }
 
+// ── Files, packs ─────────────────────────────────────────────────────────
+
+/** How long and how loud a rendered WAV is: its peak and its average (RMS) level, in dB below full scale. */
+function loudness(wav: ArrayBuffer): { seconds: number; peak_dbfs: number | null; average_dbfs: number | null } | null {
+  const view = new DataView(wav)
+  let format = 0
+  let channels = 0
+  let rate = 0
+  let bits = 0
+  for (let at = 12; at + 8 <= view.byteLength; ) {
+    const name = String.fromCharCode(view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2), view.getUint8(at + 3))
+    const size = view.getUint32(at + 4, true)
+    if (name === 'fmt ') {
+      format = view.getUint16(at + 8, true)
+      channels = view.getUint16(at + 10, true)
+      rate = view.getUint32(at + 12, true)
+      bits = view.getUint16(at + 22, true)
+    } else if (name === 'data' && channels && rate) {
+      const bytes = bits / 8
+      const count = Math.floor(Math.min(size, view.byteLength - at - 8) / bytes)
+      let peak = 0
+      let squares = 0
+      for (let i = 0, offset = at + 8; i < count; i++, offset += bytes) {
+        const sample = format === 3 && bits === 32 ? view.getFloat32(offset, true) : bits === 24 ? ((view.getInt8(offset + 2) << 16) | (view.getUint8(offset + 1) << 8) | view.getUint8(offset)) / 8388608 : bits === 16 ? view.getInt16(offset, true) / 32768 : 0
+        const size = Math.abs(sample)
+        if (size > peak) peak = size
+        squares += sample * sample
+      }
+      const db = (level: number): number | null => (level > 0 ? Math.round(20 * Math.log10(level) * 10) / 10 : null)
+      return { seconds: Math.round((count / channels / rate) * 100) / 100, peak_dbfs: db(peak), average_dbfs: db(Math.sqrt(squares / Math.max(1, count))) }
+    }
+    at += 8 + size + (size & 1)
+  }
+  return null
+}
+
+/** Refuses to replace the open project while it has changes that are not saved, unless told they may go. */
+function mayReplace(args: Args): void {
+  if (useStudio.getState().dirty && flag(args, 'discard_unsaved_changes') !== true) {
+    throw new Refused('The open project has unsaved changes, which this would lose. Ask the user, then either save_project first or pass discard_unsaved_changes: true.')
+  }
+}
+
+const FILE_TOOLS: Record<string, (args: Args) => unknown | Promise<unknown>> = {
+  async save_project() {
+    if (!bridge) throw new Refused('mtstudio is running in a browser tab, where it cannot save to disk.')
+    const had = useStudio.getState().filePath
+    await saveProject()
+    const { filePath, dirty } = useStudio.getState()
+    if (!filePath) throw new Refused('The project has never been saved, and the user closed the dialog that asks where to put it. Nothing was saved.')
+    if (dirty && !had) throw new Refused('The user closed the dialog without choosing a place. Nothing was saved.')
+    return done(`Saved to ${filePath}.`, { path: filePath })
+  },
+
+  async list_recent_projects() {
+    const paths = (await bridge?.recentProjects()) ?? []
+    return { open_now: useStudio.getState().filePath, projects: paths.map((path) => ({ name: path.split(/[\\/]/).pop()?.replace(/\.studio$/i, ''), path })) }
+  },
+
+  async open_project(args) {
+    if (!bridge) throw new Refused('mtstudio is running in a browser tab, where it cannot open files.')
+    mayReplace(args)
+    const path = args.path === undefined || args.path === null ? null : String(args.path)
+    const opened = path ? await bridge.openRecentProject(path) : await bridge.openProject()
+    if (!opened) throw new Refused(path ? `"${path}" is not a project the user has opened or saved in mtstudio before, or it is no longer there. list_recent_projects says which are; with no path, the user is asked to pick.` : 'The user closed the dialog without picking a project.')
+    if (!showOpened(opened.json, opened.path)) throw new Refused('That file is not an mtstudio project.')
+    const p = project()
+    return done(`Opened "${p.name}": ${p.tracks.length} tracks at ${p.bpm} bpm. Every id is new; call get_project.`, { path: opened.path })
+  },
+
+  new_project(args) {
+    mayReplace(args)
+    showNewProject()
+    return done('Started an empty project. It has no tracks yet.')
+  },
+
+  async export_mixdown() {
+    const state = useStudio.getState()
+    if (engine.isRecording()) throw new Refused('mtstudio is recording; stop it first.')
+    const wav = await engine.renderMixdown()
+    const heard = loudness(wav)
+    const name = `${state.project.name}.wav`
+    if (!bridge) throw new Refused('mtstudio is running in a browser tab, where it cannot write the file.')
+    const path = (state.filePath ? await bridge.exportBeside(state.filePath, name, wav) : null) ?? (await bridge.exportFile(name, wav))
+    if (!path) throw new Refused('The mix was rendered, but the user closed the dialog that asks where to put it, so no file was written.')
+    const silent = heard && heard.peak_dbfs === null
+    return done(`Exported the mix to ${path}.`, {
+      path,
+      ...(heard ?? {}),
+      megabytes: Math.round(wav.byteLength / 1e4) / 100,
+      ...(silent ? { warning: 'The mix is silent: nothing sounded. Check for muted tracks, a solo, or instruments with no sound loaded.' } : {}),
+      ...(heard && heard.peak_dbfs !== null && heard.peak_dbfs >= 0 ? { warning: 'The mix reaches full scale and will clip. Bring the faders down.' } : {})
+    })
+  },
+
+  async list_packs(args) {
+    const search = text(args, 'search')
+    const packs = ((await bridge?.contentPacks()) ?? []).filter((each) => matches(search, each.name, each.kind, each.description))
+    return {
+      packs: packs.map((each) => ({
+        id: each.id,
+        name: each.name,
+        kind: each.kind,
+        megabytes: each.megabytes,
+        license: each.license,
+        credit: each.credit,
+        description: each.description,
+        state: each.installed ? 'installed' : each.installing ? 'installing' : 'not installed'
+      }))
+    }
+  },
+
+  async install_pack(args) {
+    if (!bridge) throw new Refused('mtstudio is running in a browser tab, where it cannot install packs.')
+    const pack = (await bridge.contentPacks()).find((each) => each.id === args.pack_id)
+    if (!pack) throw new Refused(`There is no pack with the id "${String(args.pack_id)}". list_packs lists them.`)
+    if (pack.installed) return done(`${pack.name} is already installed.`)
+    if (pack.installing) return done(`${pack.name} is already being installed.`)
+    // Not waited for: a pack is hundreds of megabytes. The list of instruments is read again when it lands.
+    void bridge
+      .installPack(pack.id)
+      .catch(() => null)
+      .then(() => refreshSfzInstruments())
+    return done(`Started installing ${pack.name} (${pack.megabytes} MB, ${pack.license}). list_packs shows when it is done.`)
+  }
+}
+
 const TOOLS: Record<string, (args: Args) => unknown | Promise<unknown>> = {
   ...SOUND_TOOLS,
+  ...FILE_TOOLS,
   get_project: describeProject,
   get_clip: describeClip,
 

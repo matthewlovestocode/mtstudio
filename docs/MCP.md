@@ -39,25 +39,33 @@ Access stays on, across restarts, until you choose **Turn Off** in the same wind
 | `set_automation` | Writes a volume or pan curve |
 | `list_patterns`, `apply_pattern` | Finds a drum pattern by style or name and writes it into a clip, with the kit its style calls for |
 | `list_parts`, `apply_part` | Finds a bass line, chord part or synth figure and writes it into a clip, following the song's chords |
+| `save_project` | Saves the project where it lives; for one never saved, mtstudio asks you where |
+| `list_recent_projects`, `open_project`, `new_project` | Opens a project you have opened or saved before, or one you pick in a dialog; starts an empty one |
+| `export_mixdown` | Renders the song to a WAV beside the project, and reports its length and level |
+| `list_packs`, `install_pack` | Lists the free instrument packs and starts installing one |
+| `screenshot` | Takes a picture of mtstudio's window |
 | `undo`, `redo` | Steps back and forward through the project's changes |
 
 Positions and lengths are in beats (quarter notes), so a bar of 4/4 is four beats; pitches are MIDI note numbers.
 
-Each call is one step of undo, the same undo as your own edits: **Edit › Undo** takes back what the assistant did.
+Each change to the project is one step of undo, the same undo as your own edits: **Edit › Undo** takes back what the assistant did. Saving, exporting, opening and installing are not edits and are not undone that way.
 
-## What it cannot do yet
+## What it cannot do
 
-- Save, open or export, or install instrument packs
-- Record
+- Record, or import audio files
 - Change a plugin's settings, or the sampler's sample
-- Hear anything. It works from the notes, and you are the one who listens.
+- Remove an instrument pack, or delete any file
+- Hear anything. It works from the notes, and from the level figures of an export; you are the one who listens.
 
 ## What keeps it safe
 
 - **Only this computer.** The app listens on `127.0.0.1`, which other machines cannot reach.
 - **Only with the token.** A request without it is refused. The token is kept in mtstudio's settings folder, in a file only your user account can read.
 - **Not from web pages.** A request that comes from a page in a browser is refused, whatever it carries.
-- **Only the project.** No tool reads or writes a file, runs a program or goes online.
+- **It never names a place on your disk.** No tool takes a path to write to. Saving goes where the project already is, or where you choose in mtstudio's own dialog. An export goes in an `exports` folder beside the project. It can open only projects you have opened or saved in mtstudio yourself, or one you pick in the dialog.
+- **Your unsaved work is guarded.** Opening another project or starting a new one is refused while there are unsaved changes, unless the assistant says outright that they may be discarded; it is told to ask you first.
+- **It goes online for one thing.** Installing an instrument pack downloads it from the address pinned in mtstudio's own list. Nothing else is fetched or sent.
+- **It can see the window.** A screenshot shows mtstudio's window only, never the rest of your screen.
 
 Anything on your computer that you give the token to can change the open project, so treat the token like a password.
 

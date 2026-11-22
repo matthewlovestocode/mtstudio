@@ -8,6 +8,7 @@ import type { EngineKind } from '@shared/nativeEngine'
 import * as audioFiles from './audioFiles'
 import { fetchMissingContent } from './firstRun'
 import { showMcpDialog, startMcp } from './mcp'
+import { isRecentProject, recentProjects, rememberProject } from './recent'
 import { nativeEngineBuilt, nativeEnginePath, startNativeEngine } from './nativeEngine'
 import { contentPacks, installPack, removePack } from './packs'
 import { sfzInstruments } from './sfz'
@@ -208,6 +209,7 @@ ipcMain.handle('project:save', async (_event, request: SaveRequest): Promise<Sav
   }
 
   await writeFile(target, JSON.stringify(project, null, 2), 'utf8')
+  await rememberProject(target)
   return { path: target, name, assetPaths }
 })
 
@@ -215,7 +217,28 @@ ipcMain.handle('project:open', async (): Promise<OpenedProject | null> => {
   const result = await dialog.showOpenDialog(mainWindow!, { filters: PROJECT_FILTERS, properties: ['openFile'] })
   const path = result.filePaths[0]
   if (result.canceled || !path) return null
-  return { path, json: await readFile(path, 'utf8') }
+  const json = await readFile(path, 'utf8')
+  await rememberProject(path)
+  return { path, json }
+})
+
+ipcMain.handle('project:recent', () => recentProjects())
+
+/** Opens a project without asking where it is: only one the user has opened or saved before. */
+ipcMain.handle('project:openRecent', async (_event, path: string): Promise<OpenedProject | null> => {
+  if (typeof path !== 'string' || !(await isRecentProject(path))) return null
+  const json = await readFile(path, 'utf8').catch(() => null)
+  return json === null ? null : { path, json }
+})
+
+/** Writes a mixdown into the `exports` folder beside a project the user has saved, under a name that is free. */
+ipcMain.handle('file:exportBeside', async (_event, projectPath: string, name: string, data: ArrayBuffer): Promise<string | null> => {
+  if (typeof projectPath !== 'string' || !(await isRecentProject(projectPath))) return null
+  const dir = join(dirname(projectPath), 'exports')
+  await mkdir(dir, { recursive: true })
+  const file = await freeName(dir, `${basename(String(name), extname(String(name)))}.wav`)
+  await writeFile(join(dir, file), Buffer.from(data))
+  return join(dir, file)
 })
 
 /** The absolute path of an audio asset, or null if it is not an audio file the renderer may touch. */

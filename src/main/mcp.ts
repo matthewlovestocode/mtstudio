@@ -24,6 +24,11 @@ const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05']
 const MAX_BODY = 4 * 1024 * 1024
 /** How long the window is given to carry out a call. */
 const CALL_TIMEOUT = 30_000
+/** Tools that may wait on the user (a dialog asking where to save) or on a long render. */
+const SLOW_TOOLS = new Set(['save_project', 'open_project', 'export_mixdown'])
+const SLOW_TIMEOUT = 10 * 60_000
+/** A screenshot wider than this is scaled down: it is for looking at, and every pixel costs the reader. */
+const SHOT_WIDTH = 1400
 
 interface Settings {
   enabled: boolean
@@ -64,13 +69,26 @@ function callWindow(name: string, args: unknown): Promise<McpAnswer> {
     const timer = setTimeout(() => {
       waiting.delete(id)
       resolve({ ok: false, error: `${APP_NAME} did not answer in time.` })
-    }, CALL_TIMEOUT)
+    }, SLOW_TOOLS.has(name) ? SLOW_TIMEOUT : CALL_TIMEOUT)
     waiting.set(id, (answer) => {
       clearTimeout(timer)
       resolve(answer)
     })
     window.webContents.send('mcp:call', { id, name, args })
   })
+}
+
+/** The window as it looks now, as the content of a tool's result. */
+async function screenshot(): Promise<unknown> {
+  const refuse = (text: string): unknown => ({ content: [{ type: 'text', text }], isError: true })
+  const window = getWindow()
+  if (!window || window.isDestroyed()) return refuse(`${APP_NAME}'s window is not open.`)
+  if (window.isMinimized()) return refuse(`${APP_NAME}'s window is minimised, so there is nothing to see. Ask the user to bring it back.`)
+  const shot = await window.webContents.capturePage()
+  const { width } = shot.getSize()
+  if (!width) return refuse(`${APP_NAME}'s window could not be pictured.`)
+  const png = (width > SHOT_WIDTH ? shot.resize({ width: SHOT_WIDTH, quality: 'good' }) : shot).toPNG()
+  return { content: [{ type: 'image', data: png.toString('base64'), mimeType: 'image/png' }] }
 }
 
 interface Rpc {
@@ -108,6 +126,7 @@ async function answer(message: Rpc): Promise<unknown | null> {
     case 'tools/call': {
       const name = typeof params.name === 'string' ? params.name : ''
       if (!MCP_TOOLS.some((tool) => tool.name === name)) return failure(message.id, -32602, `Unknown tool: ${name}`)
+      if (name === 'screenshot') return result(await screenshot())
       const outcome = await callWindow(name, params.arguments)
       // A tool that could not do what was asked says so in its result, where the assistant reads it.
       return result(outcome.ok ? { content: [{ type: 'text', text: JSON.stringify(outcome.value) }] } : { content: [{ type: 'text', text: outcome.error }], isError: true })
@@ -239,13 +258,13 @@ export async function showMcpDialog(): Promise<void> {
     const listening = enabled && !problem
     const buttons = listening ? ['Copy Command for Claude Code', 'New Token', 'Turn Off', 'Close'] : [enabled ? 'Try Again' : 'Turn On', ...(enabled ? ['Turn Off'] : []), 'Close']
     const detail = listening
-      ? `An assistant that knows the token below can read and change the project open in ${APP_NAME}: its tracks, clips, notes, tempo and key, and the transport. Every change it makes can be undone with Edit › Undo. It cannot reach your files.\n\n` +
+      ? `An assistant that knows the token below can read and change the project open in ${APP_NAME}: its tracks, clips, notes, instruments and mix. Every change it makes to the project can be undone with Edit › Undo. It can save the project where you have put it, open projects you have opened before and export a mixdown beside the project; the rest of your files are out of its reach.\n\n` +
         `Only programs on this computer can connect.\n\nAddress: ${address()}\nToken: ${settings.token}\n\n` +
         `To connect Claude Code, copy the command and run it in a terminal. For other assistants, give them the address, and the token as an "Authorization: Bearer" header.`
       : enabled
         ? `Assistant access is switched on, but ${APP_NAME} is not listening. ${problem}`
-        : `Switch this on to let an assistant such as Claude read and change the project open in ${APP_NAME}: its tracks, clips, notes, tempo and key, and the transport.\n\n` +
-          `Only programs on this computer that know a token can connect, every change can be undone, and your files stay out of reach. It stays on until you turn it off.`
+        : `Switch this on to let an assistant such as Claude read and change the project open in ${APP_NAME}: its tracks, clips, notes, instruments and mix.\n\n` +
+          `Only programs on this computer that know a token can connect, and every change to the project can be undone. It can save and export, and open projects you have opened before; the rest of your files stay out of reach. It stays on until you turn it off.`
     const options = {
       type: 'none' as const,
       message: listening ? 'Assistant access is on' : enabled ? 'Assistant access could not start' : 'Assistant access is off',

@@ -227,6 +227,33 @@ export const MCP_TOOLS: McpTool[] = [
     },
     ['clip_id', 'part']
   ),
+  tool(
+    'save_project',
+    "Saves the project where it already lives. A project that has never been saved has nowhere to go yet, so mtstudio asks the user where to put it and this waits for their answer. You cannot choose the place.",
+  ),
+  tool('list_recent_projects', 'The project files the user has opened or saved in mtstudio before, newest first. These are the only ones open_project can open by path.'),
+  tool(
+    'open_project',
+    "Opens a project in place of the one that is open: one of list_recent_projects by its path, or, with no path, whichever the user picks in the dialog mtstudio shows them. Unsaved changes to the open project would be lost, so it refuses while there are any unless discard_unsaved_changes is true; ask the user, or save_project, first.",
+    { path: { type: 'string', description: 'A path from list_recent_projects.' }, discard_unsaved_changes: { type: 'boolean' } }
+  ),
+  tool(
+    'new_project',
+    'Starts an empty project in place of the one that is open. Refuses while there are unsaved changes unless discard_unsaved_changes is true; ask the user, or save_project, first.',
+    { discard_unsaved_changes: { type: 'boolean' } }
+  ),
+  tool(
+    'export_mixdown',
+    "Renders the whole song to a WAV file and says how long and how loud it came out (peak and average level in dBFS), which is the nearest you can get to hearing it. The file goes in an exports folder beside a saved project; for one never saved, mtstudio asks the user where to put it."
+  ),
+  tool('list_packs', 'The free instrument packs mtstudio can download and install (basses, pianos, drums and others), with their size, licence and whether each is installed.', { search: { type: 'string' } }),
+  tool(
+    'install_pack',
+    'Starts downloading and installing an instrument pack, which can be hundreds of megabytes: ask the user before you do. It returns at once; list_packs shows when it is installed, and its instruments then appear in list_instruments.',
+    { pack_id: { type: 'string', description: 'An id from list_packs.' } },
+    ['pack_id']
+  ),
+  tool('screenshot', "A picture of mtstudio's window as the user sees it now: use it to check how something looks, not to read the project, which get_project does better."),
   tool('undo', 'Undoes the last change to the project, whoever made it.'),
   tool('redo', 'Redoes the change last undone.')
 ]

@@ -93,7 +93,7 @@ This runs on the browser's own audio. The built-in synth, sampler and drum machi
 
 ## Working with Claude
 
-mtstudio can let an assistant such as Claude read and change the open project: tracks, clips, notes, instruments, effects, the drum patterns and parts, tempo, key and the transport. Turn it on under **Assistant › Assistant Access…**, copy the command it gives you, and run it in a terminal to connect Claude Code. It is off by default, reachable only from your own computer, and every change can be undone. See [the guide](docs/MCP.md).
+mtstudio can let an assistant such as Claude read and change the open project: tracks, clips, notes, instruments, effects, the drum patterns and parts, tempo, key and the transport, and save and export it. Turn it on under **Assistant › Assistant Access…**, copy the command it gives you, and run it in a terminal to connect Claude Code. It is off by default, reachable only from your own computer, and every change can be undone. See [the guide](docs/MCP.md).
 
 ## Optional extras
 

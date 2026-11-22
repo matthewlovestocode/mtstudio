@@ -186,7 +186,13 @@ Left over:
   the synth's settings, effects, sends, automation, and the pattern and part
   libraries, applied as the step sequencer and piano roll apply them. Not
   tried: Surge XT patches and plugins, which need a plugin scan
-- Stage 3 (next): save, open, export, packs, a screenshot of the window
+- Stage 3 (done): save, open, new, export, packs and a screenshot. No tool
+  takes a path to write to: saving and exporting go where the project is or
+  where the user chooses in the app's dialog, and only projects the user has
+  opened or saved before (`src/main/recent.ts`) can be opened by path.
+  Opening or starting anew is refused over unsaved changes unless the caller
+  says to discard them. An export reports its length and peak and average
+  level. Not tried: the routes that wait on a dialog, and installing a pack
 - Tested with requests made by hand; the user has connected Claude Code to
   stage 1. The menu item is in the native menu only, not the in-window menus
 

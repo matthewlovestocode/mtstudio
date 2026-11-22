@@ -67,6 +67,10 @@ export interface StudioBridge {
   /** Writes the project and copies its audio into the project folder. Null if cancelled. */
   saveProject(request: SaveRequest): Promise<SaveResult | null>
   openProject(): Promise<OpenedProject | null>
+  /** Projects the user has opened or saved before that are still there, newest first. */
+  recentProjects(): Promise<string[]>
+  /** Opens one of those without asking; null if it is not one of them or cannot be read. */
+  openRecentProject(path: string): Promise<OpenedProject | null>
   /** Reads an audio file; `assetPath` may be relative to the project folder. Null if missing. */
   readAudioFile(projectPath: string | null, assetPath: string): Promise<ArrayBuffer | null>
   /**
@@ -88,6 +92,8 @@ export interface StudioBridge {
   writeRecording(projectPath: string | null, name: string, data: ArrayBuffer): Promise<string>
   /** Asks where to save a file and writes it. Resolves to the path, or null if cancelled. */
   exportFile(defaultName: string, data: ArrayBuffer): Promise<string | null>
+  /** Writes a file into the `exports` folder beside a saved project, without asking. Resolves to the path; null if the project is not one the user has saved. */
+  exportBeside(projectPath: string, name: string, data: ArrayBuffer): Promise<string | null>
   /** Crash-recovery snapshot; null clears it. */
   writeAutosave(data: string | null): Promise<void>
   readAutosave(): Promise<string | null>
