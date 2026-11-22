@@ -48,6 +48,7 @@ If the button in step 4 is not there, try opening mtstudio once more and look ag
 - Open the drum clip in the step sequencer and pick from **Choose a pattern…**: about 270 rhythms in twenty styles, each with a matching drum kit.
 - Open a bass or keys clip in the piano roll and pick from **Start from a part…**: bass lines, chord parts and synth figures that follow the song's key and chords.
 - Open the browser panel to install more free instruments (basses, pianos, drums). Each is a few hundred megabytes.
+- If you use Claude, mtstudio can let it work on your project: see [letting an assistant work in mtstudio](MCP.md). It is off until you turn it on.
 
 ## Updating
 
@@ -77,6 +78,6 @@ Projects you saved are wherever you saved them, and are not touched.
 
 ## Good to know
 
-- This is version 0.1, an early release. Save often.
+- This is an early release. Save often.
 - mtstudio sends nothing about you anywhere. It goes online only to download its sounds, and instrument packs you choose to install.
 - It is free software under the GNU AGPL; the source is [on GitHub](https://github.com/matthewlovestocode/mtstudio).

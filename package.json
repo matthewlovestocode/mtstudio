@@ -1,7 +1,7 @@
 {
   "name": "mtstudio",
   "productName": "mtstudio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A digital audio workstation built on Electron",
   "license": "AGPL-3.0-or-later",
   "main": "./out/main/index.js",
